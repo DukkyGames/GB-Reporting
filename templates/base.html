@@ -38,6 +38,7 @@
         <select name="range">
           <option value="this_month" {% if current_range == "this_month" %}selected{% endif %}>This month</option>
           <option value="last_month" {% if current_range == "last_month" %}selected{% endif %}>Last month</option>
+          <option value="last_year" {% if current_range == "last_year" %}selected{% endif %}>Last year</option>
           <option value="last_3_months" {% if current_range == "last_3_months" %}selected{% endif %}>Last 3 months</option>
           <option value="last_12_months" {% if current_range == "last_12_months" %}selected{% endif %}>Last 12 months</option>
           <option value="ytd" {% if current_range == "ytd" %}selected{% endif %}>Year to date</option>
@@ -59,6 +60,16 @@
       {% endfor %}
       {% block global_filters %}{% endblock %}
     </form>
+    {% if export_excel_url or export_pdf_url %}
+      <div class="export-actions">
+        {% if export_excel_url %}
+          <a class="ghost-btn" href="{{ export_excel_url }}">Export Excel</a>
+        {% endif %}
+        {% if export_pdf_url %}
+          <a class="ghost-btn" href="{{ export_pdf_url }}">Export PDF</a>
+        {% endif %}
+      </div>
+    {% endif %}
   </header>
 
   <main class="page">

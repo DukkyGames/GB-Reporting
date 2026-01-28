@@ -51,12 +51,11 @@ def _load_data(db_path: str, start_date: date, end_date: date) -> tuple[pd.DataF
     return orders, items
 
 
-def build_report(db_path: str, start_date: date, end_date: date) -> dict:
+def _build_report_core(db_path: str, start_date: date, end_date: date) -> dict:
     orders, items = _load_data(db_path, start_date, end_date)
     if orders.empty:
         return {
             "kpis": [],
-            "charts": {},
             "monthly": [],
             "table": [],
             "empty": True,
@@ -125,6 +124,49 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     if low_row is not None:
         kpis.append(("Lowest Month", f"{low_row['month'].strftime('%b %Y')} ({_money0(low_row['net_sales'])})"))
 
+    table = [
+        {
+            "month": row["month"].strftime("%b %Y"),
+            "net_sales": _money0(row["net_sales"]),
+            "orders": f"{int(row['orders']):,}",
+            "units": f"{int(row['units']):,}",
+        }
+        for _, row in monthly.iterrows()
+    ]
+
+    return {
+        "kpis": kpis,
+        "monthly": monthly,
+        "table": table,
+        "channel": channel,
+        "top_rev": top_rev,
+        "top_units": top_units,
+        "states": states,
+        "repeat_customers": repeat_customers,
+        "unique_customers": unique_customers,
+        "empty": False,
+    }
+
+
+def build_report(db_path: str, start_date: date, end_date: date) -> dict:
+    core = _build_report_core(db_path, start_date, end_date)
+    if core["empty"]:
+        return {
+            "kpis": [],
+            "charts": {},
+            "monthly": [],
+            "table": [],
+            "empty": True,
+        }
+
+    monthly = core["monthly"]
+    channel = core["channel"]
+    top_rev = core["top_rev"]
+    top_units = core["top_units"]
+    states = core["states"]
+    repeat_customers = core["repeat_customers"]
+    unique_customers = core["unique_customers"]
+
     def _native_list(values, cast=float):
         return [cast(v) for v in values]
 
@@ -157,21 +199,39 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
         },
     }
 
-    table = [
-        {
-            "month": row["month"].strftime("%b %Y"),
-            "net_sales": _money0(row["net_sales"]),
-            "orders": f"{int(row['orders']):,}",
-            "units": f"{int(row['units']):,}",
-        }
-        for _, row in monthly.iterrows()
-    ]
-
     return {
-        "kpis": kpis,
+        "kpis": core["kpis"],
         "charts": chart_data,
         "monthly": monthly,
-        "table": table,
+        "table": core["table"],
+        "empty": False,
+    }
+
+
+def build_report_pdf(db_path: str, start_date: date, end_date: date) -> dict:
+    core = _build_report_core(db_path, start_date, end_date)
+    if core["empty"]:
+        return {
+            "kpis": [],
+            "charts": {},
+            "table": [],
+            "empty": True,
+        }
+
+    chart_images = {
+        "monthly_net_sales": _chart_monthly_net_sales(core["monthly"]),
+        "orders_units": _chart_orders_units(core["monthly"]),
+        "sales_by_channel": _chart_sales_by_channel(core["channel"]),
+        "top_products_revenue": _chart_top_products(core["top_rev"], "net_sales", "Top Products by Revenue"),
+        "top_products_units": _chart_top_products(core["top_units"], "units", "Top Products by Units"),
+        "top_states": _chart_top_states(core["states"]),
+        "customer_mix": _chart_customer_mix(core["unique_customers"], core["repeat_customers"]),
+    }
+
+    return {
+        "kpis": core["kpis"],
+        "charts": chart_images,
+        "table": core["table"],
         "empty": False,
     }
 

@@ -31,7 +31,16 @@ from cache import (
     get_cache_status,
 )
 from reports import build_report, build_products_report
-from exporters import export_excel, export_pdf
+from exporters import (
+    export_excel,
+    export_pdf,
+    export_orders_excel,
+    export_orders_pdf,
+    export_inventory_excel,
+    export_inventory_pdf,
+    export_products_excel,
+    export_products_pdf,
+)
 
 load_dotenv()
 
@@ -162,6 +171,134 @@ def _build_cache_status() -> dict:
     }
 
 
+def _apply_range_key(range_key: str, start_date: date | None, end_date: date | None) -> tuple[date | None, date | None]:
+    today = _report_today()
+    if range_key == "this_month":
+        return date(today.year, today.month, 1), today
+    if range_key == "last_month":
+        first_this_month = date(today.year, today.month, 1)
+        prev_month_last = first_this_month - timedelta(days=1)
+        return date(prev_month_last.year, prev_month_last.month, 1), prev_month_last
+    if range_key == "last_year":
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
+    if range_key == "last_3_months":
+        return date(_add_months(today, -2).year, _add_months(today, -2).month, 1), today
+    if range_key == "last_12_months":
+        return date(_add_months(today, -11).year, _add_months(today, -11).month, 1), today
+    if range_key == "ytd":
+        return date(today.year, 1, 1), today
+    return start_date, end_date
+
+
+def _build_inventory_view(
+    *,
+    unit: str,
+    query: str,
+    hide_zero: bool,
+    min_total: float,
+    min_barn: float,
+    min_warehouse: float,
+    min_library: float,
+    only_barn: bool,
+    only_warehouse: bool,
+    only_library: bool,
+) -> list[dict]:
+    db = get_db(DB_PATH)
+    rows = db.execute(
+        """
+        SELECT sku, inventory_pool, current_inventory
+        FROM inventory
+        ORDER BY sku, inventory_pool
+        """
+    ).fetchall()
+    product_rows = db.execute(
+        "SELECT sku, name FROM products"
+    ).fetchall()
+    db.close()
+    product_map = {row["sku"]: row["name"] for row in product_rows if row["sku"]}
+    inventory_rows: dict[str, dict[str, float]] = {}
+    for row in rows:
+        sku = row["sku"] or ""
+        pool = (row["inventory_pool"] or "").strip().lower()
+        qty = float(row["current_inventory"] or 0)
+        if sku not in inventory_rows:
+            inventory_rows[sku] = {
+                "barn": 0.0,
+                "warehouse": 0.0,
+                "library": 0.0,
+                "total": 0.0,
+                "name": product_map.get(sku, ""),
+            }
+        if "barn" in pool:
+            inventory_rows[sku]["barn"] += qty
+        elif "warehouse" in pool:
+            inventory_rows[sku]["warehouse"] += qty
+        elif "library" in pool:
+            inventory_rows[sku]["library"] += qty
+        else:
+            # Unclassified pools roll into total only.
+            pass
+        inventory_rows[sku]["total"] += qty
+
+    inventory = [
+        {"sku": sku, **values}
+        for sku, values in sorted(inventory_rows.items(), key=lambda item: item[0])
+    ]
+    per_case = 12
+    unit_divisor = per_case if unit == "case" else 1
+
+    filtered = []
+    any_only = only_barn or only_warehouse or only_library
+    for row in inventory:
+        total = row.get("total", 0) / unit_divisor
+        barn = row.get("barn", 0) / unit_divisor
+        warehouse = row.get("warehouse", 0) / unit_divisor
+        library = row.get("library", 0) / unit_divisor
+
+        if query and query not in row.get("sku", "").lower():
+            continue
+        if hide_zero and total <= 0:
+            continue
+        if total < min_total:
+            continue
+        if barn < min_barn:
+            continue
+        if warehouse < min_warehouse:
+            continue
+        if library < min_library:
+            continue
+        if any_only:
+            matches_pool = False
+            if only_barn and barn > 0:
+                matches_pool = True
+            if only_warehouse and warehouse > 0:
+                matches_pool = True
+            if only_library and library > 0:
+                matches_pool = True
+            if not matches_pool:
+                continue
+        display_row = dict(row)
+        display_row["total"] = total
+        display_row["barn"] = barn
+        display_row["warehouse"] = warehouse
+        display_row["library"] = library
+        filtered.append(display_row)
+    return filtered
+
+
+@app.context_processor
+def inject_export_urls():
+    exportable = {"dashboard", "orders", "inventory", "products_report"}
+    endpoint = request.endpoint
+    if endpoint not in exportable:
+        return {"export_excel_url": None, "export_pdf_url": None}
+    args = request.args.to_dict(flat=True)
+    return {
+        "export_excel_url": url_for("export_current_excel", export_endpoint=endpoint, **args),
+        "export_pdf_url": url_for("export_current_pdf", export_endpoint=endpoint, **args),
+    }
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -201,6 +338,12 @@ def dashboard():
         prev_month_last = first_this_month - timedelta(days=1)
         start_date = date(prev_month_last.year, prev_month_last.month, 1)
         end_date = prev_month_last
+    elif range_key == "last_year":
+        start_date = date(today.year - 1, 1, 1)
+        end_date = date(today.year - 1, 12, 31)
+    elif range_key == "last_year":
+        start_date = date(today.year - 1, 1, 1)
+        end_date = date(today.year - 1, 12, 31)
     elif range_key == "last_3_months":
         start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
         end_date = today
@@ -280,47 +423,6 @@ def products_report():
 @app.route("/inventory", methods=["GET"])
 @login_required
 def inventory():
-    db = get_db(DB_PATH)
-    rows = db.execute(
-        """
-        SELECT sku, inventory_pool, current_inventory
-        FROM inventory
-        ORDER BY sku, inventory_pool
-        """
-    ).fetchall()
-    product_rows = db.execute(
-        "SELECT sku, name FROM products"
-    ).fetchall()
-    db.close()
-    product_map = {row["sku"]: row["name"] for row in product_rows if row["sku"]}
-    inventory_rows: dict[str, dict[str, float]] = {}
-    for row in rows:
-        sku = row["sku"] or ""
-        pool = (row["inventory_pool"] or "").strip().lower()
-        qty = float(row["current_inventory"] or 0)
-        if sku not in inventory_rows:
-            inventory_rows[sku] = {
-                "barn": 0.0,
-                "warehouse": 0.0,
-                "library": 0.0,
-                "total": 0.0,
-                "name": product_map.get(sku, ""),
-            }
-        if "barn" in pool:
-            inventory_rows[sku]["barn"] += qty
-        elif "warehouse" in pool:
-            inventory_rows[sku]["warehouse"] += qty
-        elif "library" in pool:
-            inventory_rows[sku]["library"] += qty
-        else:
-            # Unclassified pools roll into total only.
-            pass
-        inventory_rows[sku]["total"] += qty
-
-    inventory = [
-        {"sku": sku, **values}
-        for sku, values in sorted(inventory_rows.items(), key=lambda item: item[0])
-    ]
     query = request.args.get("q", "").strip().lower()
     hide_zero = request.args.get("hide_zero", "0") == "1"
     min_total = float(request.args.get("min_total", "0") or 0)
@@ -331,45 +433,18 @@ def inventory():
     only_warehouse = request.args.get("only_warehouse", "0") == "1"
     only_library = request.args.get("only_library", "0") == "1"
     unit = request.args.get("unit", "bottle")
-    per_case = 12
-    unit_divisor = per_case if unit == "case" else 1
-
-    filtered = []
-    any_only = only_barn or only_warehouse or only_library
-    for row in inventory:
-        total = row.get("total", 0) / unit_divisor
-        barn = row.get("barn", 0) / unit_divisor
-        warehouse = row.get("warehouse", 0) / unit_divisor
-        library = row.get("library", 0) / unit_divisor
-
-        if query and query not in row.get("sku", "").lower():
-            continue
-        if hide_zero and total <= 0:
-            continue
-        if total < min_total:
-            continue
-        if barn < min_barn:
-            continue
-        if warehouse < min_warehouse:
-            continue
-        if library < min_library:
-            continue
-        if any_only:
-            matches_pool = False
-            if only_barn and barn > 0:
-                matches_pool = True
-            if only_warehouse and warehouse > 0:
-                matches_pool = True
-            if only_library and library > 0:
-                matches_pool = True
-            if not matches_pool:
-                continue
-        display_row = dict(row)
-        display_row["total"] = total
-        display_row["barn"] = barn
-        display_row["warehouse"] = warehouse
-        display_row["library"] = library
-        filtered.append(display_row)
+    filtered = _build_inventory_view(
+        unit=unit,
+        query=query,
+        hide_zero=hide_zero,
+        min_total=min_total,
+        min_barn=min_barn,
+        min_warehouse=min_warehouse,
+        min_library=min_library,
+        only_barn=only_barn,
+        only_warehouse=only_warehouse,
+        only_library=only_library,
+    )
 
     return render_template(
         "inventory.html",
@@ -406,27 +481,8 @@ def orders():
     min_total = request.args.get("min_total", "").strip()
     max_total = request.args.get("max_total", "").strip()
 
-    today = _report_today()
-    if range_key == "this_month":
-        start_date = date(today.year, today.month, 1)
-        end_date = today
-    elif range_key == "last_month":
-        first_this_month = date(today.year, today.month, 1)
-        prev_month_last = first_this_month - timedelta(days=1)
-        start_date = date(prev_month_last.year, prev_month_last.month, 1)
-        end_date = prev_month_last
-    elif range_key == "last_3_months":
-        start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
-        end_date = today
-    elif range_key == "last_12_months":
-        start_date = date(_add_months(today, -11).year, _add_months(today, -11).month, 1)
-        end_date = today
-    elif range_key == "ytd":
-        start_date = date(today.year, 1, 1)
-        end_date = today
-    elif range_key == "custom":
-        pass
-    else:
+    start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+    if range_key not in {"this_month", "last_month", "last_year", "last_3_months", "last_12_months", "ytd", "custom"}:
         range_key = "custom"
 
     if start_date and end_date and start_date > end_date:
@@ -589,6 +645,338 @@ def export_pdf_route():
     buffer = export_pdf(DB_PATH, start_date, end_date)
     filename = f"grimms_bluff_report_{start_date.isoformat()}_{end_date.isoformat()}.pdf"
     return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+
+@app.route("/export/current/excel/<export_endpoint>")
+@login_required
+def export_current_excel(export_endpoint: str):
+    if export_endpoint == "dashboard":
+        range_key = request.args.get("range", "last_12_months")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if not start_date or not end_date:
+            start_date, end_date = _default_dates()
+        buffer = export_excel(DB_PATH, start_date, end_date)
+        filename = f"grimms_bluff_report_{start_date.isoformat()}_{end_date.isoformat()}.xlsx"
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    if export_endpoint == "products_report":
+        range_key = request.args.get("range", "last_12_months")
+        unit = request.args.get("unit", "case")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if not start_date or not end_date:
+            start_date, end_date = _default_dates()
+        report = build_products_report(DB_PATH, start_date, end_date, unit=unit)
+        buffer = export_products_excel(report, start_date, end_date)
+        filename = f"grimms_bluff_products_{start_date.isoformat()}_{end_date.isoformat()}.xlsx"
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    if export_endpoint == "inventory":
+        query = request.args.get("q", "").strip().lower()
+        hide_zero = request.args.get("hide_zero", "0") == "1"
+        min_total = float(request.args.get("min_total", "0") or 0)
+        min_barn = float(request.args.get("min_barn", "0") or 0)
+        min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
+        min_library = float(request.args.get("min_library", "0") or 0)
+        only_barn = request.args.get("only_barn", "0") == "1"
+        only_warehouse = request.args.get("only_warehouse", "0") == "1"
+        only_library = request.args.get("only_library", "0") == "1"
+        unit = request.args.get("unit", "bottle")
+        rows = _build_inventory_view(
+            unit=unit,
+            query=query,
+            hide_zero=hide_zero,
+            min_total=min_total,
+            min_barn=min_barn,
+            min_warehouse=min_warehouse,
+            min_library=min_library,
+            only_barn=only_barn,
+            only_warehouse=only_warehouse,
+            only_library=only_library,
+        )
+        buffer = export_inventory_excel(rows, unit=unit)
+        filename = f"grimms_bluff_inventory_{_report_today().isoformat()}.xlsx"
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    if export_endpoint == "orders":
+        query = request.args.get("q", "").strip()
+        range_key = request.args.get("range", "custom")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        page = max(int(request.args.get("page", "1") or 1), 1)
+        per_page = 100
+        order_type = request.args.get("order_type", "").strip()
+        order_status = request.args.get("order_status", "").strip()
+        ship_state = request.args.get("ship_state", "").strip()
+        pickup = request.args.get("pickup", "").strip()
+        min_total = request.args.get("min_total", "").strip()
+        max_total = request.args.get("max_total", "").strip()
+
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        filters = []
+        params = []
+        if start_date and end_date:
+            filters.append("date(completed_date) BETWEEN ? AND ?")
+            params.extend([start_date.isoformat(), end_date.isoformat()])
+        elif start_date:
+            filters.append("date(completed_date) >= ?")
+            params.append(start_date.isoformat())
+        elif end_date:
+            filters.append("date(completed_date) <= ?")
+            params.append(end_date.isoformat())
+
+        if order_type:
+            filters.append("order_type = ?")
+            params.append(order_type)
+        if order_status:
+            filters.append("order_status = ?")
+            params.append(order_status)
+        if ship_state:
+            filters.append("ship_state = ?")
+            params.append(ship_state)
+        if pickup in ("pickup", "ship"):
+            filters.append("pickup = ?")
+            params.append(1 if pickup == "pickup" else 0)
+        if min_total:
+            filters.append("order_total >= ?")
+            params.append(min_total)
+        if max_total:
+            filters.append("order_total <= ?")
+            params.append(max_total)
+        if query:
+            like = f"%{query}%"
+            filters.append("(order_id LIKE ? OR order_number LIKE ? OR customer_id LIKE ?)")
+            params.extend([like, like, like])
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        offset = (page - 1) * per_page
+        db = get_db(DB_PATH)
+        rows = db.execute(
+            f"""
+            SELECT order_id, order_number, completed_date,
+                   bill_first_name, bill_last_name, order_type, order_status, ship_state, order_total, pickup
+            FROM orders
+            {where_clause}
+            ORDER BY CAST(order_number AS INTEGER) DESC, order_number DESC
+            LIMIT ? OFFSET ?
+            """,
+            params + [per_page, offset],
+        ).fetchall()
+        db.close()
+
+        export_rows = []
+        for row in rows:
+            completed_raw = str(row["completed_date"] or "")
+            if len(completed_raw) == 10:
+                completed_local = completed_raw
+            else:
+                try:
+                    completed_dt = datetime.fromisoformat(completed_raw.replace("Z", "+00:00"))
+                    completed_local = completed_dt.astimezone(PACIFIC_TZ).strftime("%Y-%m-%d")
+                except ValueError:
+                    completed_local = completed_raw
+            export_rows.append(
+                {
+                    "order_number": row["order_number"],
+                    "completed_date": completed_local,
+                    "customer": f"{row['bill_first_name']} {row['bill_last_name']}".strip(),
+                    "order_type": row["order_type"],
+                    "order_status": row["order_status"],
+                    "ship_state": row["ship_state"],
+                    "order_total": row["order_total"],
+                    "pickup": "Yes" if row["pickup"] else "No",
+                }
+            )
+
+        buffer = export_orders_excel(export_rows)
+        filename = f"grimms_bluff_orders_page_{page}.xlsx"
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    return ("Unsupported export", 400)
+
+
+@app.route("/export/current/pdf/<export_endpoint>")
+@login_required
+def export_current_pdf(export_endpoint: str):
+    if export_endpoint == "dashboard":
+        range_key = request.args.get("range", "last_12_months")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if not start_date or not end_date:
+            start_date, end_date = _default_dates()
+        buffer = export_pdf(DB_PATH, start_date, end_date)
+        filename = f"grimms_bluff_report_{start_date.isoformat()}_{end_date.isoformat()}.pdf"
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+    if export_endpoint == "products_report":
+        range_key = request.args.get("range", "last_12_months")
+        unit = request.args.get("unit", "case")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if not start_date or not end_date:
+            start_date, end_date = _default_dates()
+        report = build_products_report(DB_PATH, start_date, end_date, unit=unit)
+        buffer = export_products_pdf(report, start_date, end_date)
+        filename = f"grimms_bluff_products_{start_date.isoformat()}_{end_date.isoformat()}.pdf"
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+    if export_endpoint == "inventory":
+        query = request.args.get("q", "").strip().lower()
+        hide_zero = request.args.get("hide_zero", "0") == "1"
+        min_total = float(request.args.get("min_total", "0") or 0)
+        min_barn = float(request.args.get("min_barn", "0") or 0)
+        min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
+        min_library = float(request.args.get("min_library", "0") or 0)
+        only_barn = request.args.get("only_barn", "0") == "1"
+        only_warehouse = request.args.get("only_warehouse", "0") == "1"
+        only_library = request.args.get("only_library", "0") == "1"
+        unit = request.args.get("unit", "bottle")
+        rows = _build_inventory_view(
+            unit=unit,
+            query=query,
+            hide_zero=hide_zero,
+            min_total=min_total,
+            min_barn=min_barn,
+            min_warehouse=min_warehouse,
+            min_library=min_library,
+            only_barn=only_barn,
+            only_warehouse=only_warehouse,
+            only_library=only_library,
+        )
+        buffer = export_inventory_pdf(rows, unit=unit)
+        filename = f"grimms_bluff_inventory_{_report_today().isoformat()}.pdf"
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+    if export_endpoint == "orders":
+        query = request.args.get("q", "").strip()
+        range_key = request.args.get("range", "custom")
+        start_date = _parse_date(request.args.get("start"))
+        end_date = _parse_date(request.args.get("end"))
+        page = max(int(request.args.get("page", "1") or 1), 1)
+        per_page = 100
+        order_type = request.args.get("order_type", "").strip()
+        order_status = request.args.get("order_status", "").strip()
+        ship_state = request.args.get("ship_state", "").strip()
+        pickup = request.args.get("pickup", "").strip()
+        min_total = request.args.get("min_total", "").strip()
+        max_total = request.args.get("max_total", "").strip()
+
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        filters = []
+        params = []
+        if start_date and end_date:
+            filters.append("date(completed_date) BETWEEN ? AND ?")
+            params.extend([start_date.isoformat(), end_date.isoformat()])
+        elif start_date:
+            filters.append("date(completed_date) >= ?")
+            params.append(start_date.isoformat())
+        elif end_date:
+            filters.append("date(completed_date) <= ?")
+            params.append(end_date.isoformat())
+
+        if order_type:
+            filters.append("order_type = ?")
+            params.append(order_type)
+        if order_status:
+            filters.append("order_status = ?")
+            params.append(order_status)
+        if ship_state:
+            filters.append("ship_state = ?")
+            params.append(ship_state)
+        if pickup in ("pickup", "ship"):
+            filters.append("pickup = ?")
+            params.append(1 if pickup == "pickup" else 0)
+        if min_total:
+            filters.append("order_total >= ?")
+            params.append(min_total)
+        if max_total:
+            filters.append("order_total <= ?")
+            params.append(max_total)
+        if query:
+            like = f"%{query}%"
+            filters.append("(order_id LIKE ? OR order_number LIKE ? OR customer_id LIKE ?)")
+            params.extend([like, like, like])
+
+        where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+        offset = (page - 1) * per_page
+        db = get_db(DB_PATH)
+        rows = db.execute(
+            f"""
+            SELECT order_id, order_number, completed_date,
+                   bill_first_name, bill_last_name, order_type, order_status, ship_state, order_total, pickup
+            FROM orders
+            {where_clause}
+            ORDER BY CAST(order_number AS INTEGER) DESC, order_number DESC
+            LIMIT ? OFFSET ?
+            """,
+            params + [per_page, offset],
+        ).fetchall()
+        db.close()
+
+        export_rows = []
+        for row in rows:
+            completed_raw = str(row["completed_date"] or "")
+            if len(completed_raw) == 10:
+                completed_local = completed_raw
+            else:
+                try:
+                    completed_dt = datetime.fromisoformat(completed_raw.replace("Z", "+00:00"))
+                    completed_local = completed_dt.astimezone(PACIFIC_TZ).strftime("%Y-%m-%d")
+                except ValueError:
+                    completed_local = completed_raw
+            export_rows.append(
+                {
+                    "order_number": row["order_number"],
+                    "completed_date": completed_local,
+                    "customer": f"{row['bill_first_name']} {row['bill_last_name']}".strip(),
+                    "order_type": row["order_type"],
+                    "order_status": row["order_status"],
+                    "ship_state": row["ship_state"],
+                    "order_total": row["order_total"],
+                    "pickup": "Yes" if row["pickup"] else "No",
+                }
+            )
+
+        subtitle_parts = [f"Page {page}"]
+        if start_date and end_date:
+            subtitle_parts.append(f"{start_date.isoformat()} to {end_date.isoformat()}")
+        subtitle = " • ".join(subtitle_parts)
+        buffer = export_orders_pdf(export_rows, subtitle=subtitle)
+        filename = f"grimms_bluff_orders_page_{page}.pdf"
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+    return ("Unsupported export", 400)
 
 
 @app.route("/refresh/orders", methods=["POST"])

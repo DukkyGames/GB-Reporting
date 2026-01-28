@@ -97,6 +97,13 @@ body {
   flex-wrap: wrap;
 }
 
+.export-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .primary-btn,
 .ghost-btn {
   border-radius: 999px;
