@@ -1,18 +1,5 @@
 {% extends "base.html" %}
 
-{% set preserve_skip = ["unit"] %}
-
-{% block global_filters %}
-  <label class="inline-check">
-    <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
-    Cases
-  </label>
-  <label class="inline-check">
-    <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
-    Bottles
-  </label>
-{% endblock %}
-
 {% block content %}
   {% if report.empty %}
     <section class="panel">

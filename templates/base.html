@@ -12,6 +12,11 @@
   {% set current_start = start_date|default(request.args.get("start", "")) %}
   {% set current_end = end_date|default(request.args.get("end", "")) %}
   {% set preserve_skip = preserve_skip|default([]) %}
+  {% if request.endpoint == "inventory" %}
+    {% set current_unit = request.args.get("unit", "bottle") %}
+  {% else %}
+    {% set current_unit = request.args.get("unit", "case") %}
+  {% endif %}
   <header class="topbar">
     <div class="brand">
       <a class="brand-link" href="{{ url_for('dashboard') }}">
@@ -20,16 +25,16 @@
         </div>
         <div>
           <h1>Grimm's Bluff Dashboard</h1>
-          <p>Because WineDirect sucks ass</p>
+          <p>Because WineDirect sucks</p>
         </div>
       </a>
     </div>
     <div class="controls">
-      <a class="ghost-btn" href="{{ url_for('dashboard') }}">Dashboard</a>
-      <a class="ghost-btn" href="{{ url_for('orders') }}">Orders</a>
-      <a class="ghost-btn" href="{{ url_for('products_report') }}">Products Report</a>
-      <a class="ghost-btn" href="{{ url_for('inventory') }}">Inventory</a>
-      <a class="ghost-btn" href="{{ url_for('cache_view') }}">Cache</a>
+      <a class="ghost-btn" href="{{ url_for('dashboard', range=current_range, start=current_start, end=current_end) }}">Dashboard</a>
+      <a class="ghost-btn" href="{{ url_for('orders', range=current_range, start=current_start, end=current_end) }}">Orders</a>
+      <a class="ghost-btn" href="{{ url_for('products_report', range=current_range, start=current_start, end=current_end) }}">Products Report</a>
+      <a class="ghost-btn" href="{{ url_for('inventory', range=current_range, start=current_start, end=current_end) }}">Inventory</a>
+      <a class="ghost-btn" href="{{ url_for('cache_view', range=current_range, start=current_start, end=current_end) }}">Cache</a>
       <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
     </div>
     <form class="date-form" method="get" action="{{ request.path }}" data-autosubmit>
@@ -53,12 +58,19 @@
         End
         <input type="date" name="end" value="{{ current_end }}" />
       </label>
+      <label class="inline-check">
+        <input type="radio" name="unit" value="case" {% if current_unit == "case" %}checked{% endif %} />
+        Cases
+      </label>
+      <label class="inline-check">
+        <input type="radio" name="unit" value="bottle" {% if current_unit != "case" %}checked{% endif %} />
+        Bottles
+      </label>
       {% for key, value in request.args.items() %}
-        {% if key not in ["range", "start", "end"] and key not in preserve_skip %}
+        {% if key not in ["range", "start", "end", "unit"] and key not in preserve_skip %}
           <input type="hidden" name="{{ key }}" value="{{ value }}" />
         {% endif %}
       {% endfor %}
-      {% block global_filters %}{% endblock %}
     </form>
     {% if export_excel_url or export_pdf_url %}
       <div class="export-actions">

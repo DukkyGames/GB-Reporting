@@ -325,6 +325,7 @@ def logout():
 @login_required
 def dashboard():
     range_key = request.args.get("range", "last_12_months")
+    unit = request.args.get("unit", "case")
     start_default, end_default = _default_dates()
     start_date = _parse_date(request.args.get("start")) or start_default
     end_date = _parse_date(request.args.get("end")) or end_default
@@ -360,12 +361,48 @@ def dashboard():
         start_date, end_date = end_date, start_date
 
     report = build_report(DB_PATH, start_date, end_date)
+    unit_label = "Cases" if unit == "case" else "Bottles"
+    unit_factor = 12 if unit == "case" else 1
+    if not report.get("empty"):
+        updated_kpis = []
+        for label, value in report.get("kpis", []):
+            if label == "Bottles Sold":
+                if unit == "case":
+                    try:
+                        raw_units = float(str(value).replace(",", ""))
+                        value = f"{raw_units / unit_factor:,.1f}"
+                    except ValueError:
+                        pass
+                    label = "Cases Sold"
+            elif label == "Avg Bottle Price" and unit == "case":
+                try:
+                    raw_price = float(str(value).replace("$", "").replace(",", ""))
+                    value = f"${raw_price * unit_factor:,.2f}"
+                    label = "Avg Case Price"
+                except ValueError:
+                    label = "Avg Case Price"
+            elif label == "Avg Bottles / Customer" and unit == "case":
+                try:
+                    raw_avg = float(str(value).replace(",", ""))
+                    value = f"{raw_avg / unit_factor:,.1f}"
+                    label = "Avg Cases / Customer"
+                except ValueError:
+                    label = "Avg Cases / Customer"
+            updated_kpis.append((label, value))
+        report["kpis"] = updated_kpis
+
+        if "monthly" in report.get("charts", {}):
+            units = report["charts"]["monthly"].get("units", [])
+            if unit == "case":
+                report["charts"]["monthly"]["units"] = [u / unit_factor for u in units]
     return render_template(
         "dashboard.html",
         report=report,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
+        unit=unit,
+        unit_label=unit_label,
     )
 
 

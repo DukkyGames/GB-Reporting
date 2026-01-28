@@ -18,11 +18,14 @@
           "Total Collected": "icons/Total Collected.png",
           "Orders": "icons/Orders.png",
           "Bottles Sold": "icons/Units Sold.png",
+          "Cases Sold": "icons/Units Sold.png",
           "Avg Order Value": "icons/Avg order value.png",
           "Avg Bottle Price": "icons/Average Bottle Price.png",
+          "Avg Case Price": "icons/Average Bottle Price.png",
           "Unique Customers": "icons/Unique Customers.png",
           "Repeat Rate": "icons/Repeat Rate.png",
           "Avg Bottles / Customer": "icons/Average bottles Cust.png",
+          "Avg Cases / Customer": "icons/Average bottles Cust.png",
           "Shipped Orders": "icons/Shipped orders.png",
           "Pickup Orders": "icons/Pickup orders.png",
           "Taxes Collected": "icons/Taxes Collected.png",
@@ -54,8 +57,8 @@
       </div>
       <div class="panel">
         <div class="panel-head">
-          <h3>Orders & Bottles</h3>
-          <p>Orders (bars) and bottles (line) each month</p>
+          <h3>Orders & {{ unit_label }}</h3>
+          <p>Orders (bars) and {{ unit_label|lower }} (line) each month</p>
         </div>
         <div class="chart-plot" id="chart-orders-units"></div>
       </div>
@@ -138,6 +141,7 @@
       const netSales = charts.monthly.net_sales || [];
       const orders = charts.monthly.orders || [];
       const units = charts.monthly.units || [];
+      const unitLabel = "{{ unit_label }}";
 
       Plotly.newPlot(
         "chart-monthly-net-sales",
@@ -175,9 +179,9 @@
             y: units,
             type: "scatter",
             mode: "lines+markers",
-            name: "bottles",
+            name: unitLabel,
             line: { color: "#f7b44a" },
-            hovertemplate: "%{x}<br>%{y} bottles<extra></extra>",
+            hovertemplate: `%{x}<br>%{y} ${unitLabel.toLowerCase()}<extra></extra>`,
           },
         ],
         {
