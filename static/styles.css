@@ -198,6 +198,39 @@ body {
   color: var(--ink);
 }
 
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.filter-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.filter-form input {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.inline-check input {
+  margin: 0;
+}
 .panel {
   background: var(--surface);
   border-radius: 18px;

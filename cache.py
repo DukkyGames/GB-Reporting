@@ -539,7 +539,7 @@ def refresh_products_cache(path: str) -> None:
                 product.get("sku"),
                 product.get("name"),
                 product.get("last_updated"),
-                json.dumps(product),
+                json.dumps(product, default=str),
             ),
         )
     db.commit()

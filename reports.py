@@ -179,6 +179,7 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
     merged["sku"] = merged["sku"].fillna("")
     merged["product_name"] = merged["product_name"].fillna("")
     merged["quantity"] = pd.to_numeric(merged["quantity"], errors="coerce").fillna(0)
+    merged["cases_sold"] = merged["quantity"] / 12
     merged["net_sales"] = pd.to_numeric(merged["net_sales"], errors="coerce").fillna(0)
     merged["price"] = pd.to_numeric(merged["price"], errors="coerce").fillna(0)
     merged["calc_sales"] = merged["net_sales"]
@@ -187,7 +188,7 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
 
     grouped = (
         merged.groupby(["sku", "product_name", "order_type"], dropna=False)
-        .agg(cases_sold=("quantity", "sum"), net_sales=("calc_sales", "sum"))
+        .agg(cases_sold=("cases_sold", "sum"), net_sales=("calc_sales", "sum"))
         .reset_index()
     )
     grouped["avg_sale"] = grouped.apply(

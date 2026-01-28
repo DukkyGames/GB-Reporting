@@ -273,14 +273,97 @@ def inventory():
     db = get_db(DB_PATH)
     rows = db.execute(
         """
-        SELECT sku, inventory_pool, inventory_pool_id, website_id, current_inventory
+        SELECT sku, inventory_pool, current_inventory
         FROM inventory
         ORDER BY sku, inventory_pool
-        LIMIT 500
         """
     ).fetchall()
+    product_rows = db.execute(
+        "SELECT sku, name FROM products"
+    ).fetchall()
     db.close()
-    return render_template("inventory.html", inventory=rows)
+    product_map = {row["sku"]: row["name"] for row in product_rows if row["sku"]}
+    inventory_rows: dict[str, dict[str, float]] = {}
+    for row in rows:
+        sku = row["sku"] or ""
+        pool = (row["inventory_pool"] or "").strip().lower()
+        qty = float(row["current_inventory"] or 0)
+        if sku not in inventory_rows:
+            inventory_rows[sku] = {
+                "barn": 0.0,
+                "warehouse": 0.0,
+                "library": 0.0,
+                "total": 0.0,
+                "name": product_map.get(sku, ""),
+            }
+        if "barn" in pool:
+            inventory_rows[sku]["barn"] += qty
+        elif "warehouse" in pool:
+            inventory_rows[sku]["warehouse"] += qty
+        elif "library" in pool:
+            inventory_rows[sku]["library"] += qty
+        else:
+            # Unclassified pools roll into total only.
+            pass
+        inventory_rows[sku]["total"] += qty
+
+    inventory = [
+        {"sku": sku, **values}
+        for sku, values in sorted(inventory_rows.items(), key=lambda item: item[0])
+    ]
+    query = request.args.get("q", "").strip().lower()
+    hide_zero = request.args.get("hide_zero", "0") == "1"
+    min_total = float(request.args.get("min_total", "0") or 0)
+    min_barn = float(request.args.get("min_barn", "0") or 0)
+    min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
+    min_library = float(request.args.get("min_library", "0") or 0)
+    only_barn = request.args.get("only_barn", "0") == "1"
+    only_warehouse = request.args.get("only_warehouse", "0") == "1"
+    only_library = request.args.get("only_library", "0") == "1"
+
+    filtered = []
+    for row in inventory:
+        total = row.get("total", 0)
+        barn = row.get("barn", 0)
+        warehouse = row.get("warehouse", 0)
+        library = row.get("library", 0)
+
+        if query and query not in row.get("sku", "").lower():
+            continue
+        if hide_zero and total <= 0:
+            continue
+        if total < min_total:
+            continue
+        if barn < min_barn:
+            continue
+        if warehouse < min_warehouse:
+            continue
+        if library < min_library:
+            continue
+        if only_barn and (barn <= 0 or warehouse > 0 or library > 0):
+            continue
+        if only_warehouse and (warehouse <= 0 or barn > 0 or library > 0):
+            continue
+        if only_library and (library <= 0 or barn > 0 or warehouse > 0):
+            continue
+        filtered.append(row)
+
+    return render_template(
+        "inventory.html",
+        inventory=filtered,
+        hide_zero=hide_zero,
+        query=query,
+        min_total=min_total,
+        min_barn=min_barn,
+        min_warehouse=min_warehouse,
+        min_library=min_library,
+        only_barn=only_barn,
+        only_warehouse=only_warehouse,
+        only_library=only_library,
+        show_barn=not (only_warehouse or only_library),
+        show_warehouse=not (only_barn or only_library),
+        show_library=not (only_barn or only_warehouse),
+    )
 
 
 @app.route("/orders", methods=["GET"])

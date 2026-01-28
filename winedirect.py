@@ -224,27 +224,28 @@ class WineDirectClient:
 
     def fetch_products(self) -> List[Dict[str, Any]]:
         products: List[Dict[str, Any]] = []
-        page = 1
-        max_rows = 500
-        while True:
-            response = self._search_products(page=page, max_rows=max_rows)
-            product_rows = self._extract_products(response)
-            products.extend(product_rows)
+        max_rows = 100
+        for is_active in (1, 0):
+            page = 1
+            while True:
+                response = self._search_products(page=page, max_rows=max_rows, is_active=is_active)
+                product_rows = self._extract_products(response)
+                products.extend(product_rows)
 
-            total_candidates = (
-                response.get("Total"),
-                response.get("TotalRows"),
-                response.get("RecordCount"),
-                response.get("TotalRecordCount"),
-            )
-            total = next((int(value) for value in total_candidates if value not in (None, "")), 0)
-            if not product_rows:
-                break
-            if total > 0 and len(products) >= total:
-                break
-            if total == 0 and len(product_rows) < max_rows:
-                break
-            page += 1
+                total_candidates = (
+                    response.get("Total"),
+                    response.get("TotalRows"),
+                    response.get("RecordCount"),
+                    response.get("TotalRecordCount"),
+                )
+                total = next((int(value) for value in total_candidates if value not in (None, "")), 0)
+                if not product_rows:
+                    break
+                if total > 0 and len(products) >= total and page > 1:
+                    break
+                if total == 0 and len(product_rows) < max_rows:
+                    break
+                page += 1
 
         normalized = []
         for product in products:
@@ -252,8 +253,8 @@ class WineDirectClient:
                 {
                     "product_id": str(product.get("ProductID") or product.get("ProductId") or ""),
                     "sku": product.get("SKU") or product.get("Sku") or "",
-                    "name": product.get("ProductName") or product.get("Name") or "",
-                    "last_updated": product.get("LastModified") or "",
+                    "name": product.get("ProductName") or product.get("Name") or product.get("Title") or "",
+                    "last_updated": product.get("DateModified") or product.get("LastModified") or "",
                 }
             )
         return normalized
@@ -356,17 +357,24 @@ class WineDirectClient:
             raise last_exc
         return {}
 
-    def _search_products(self, page: int = 1, max_rows: int = 500) -> Dict[str, Any]:
-        today = datetime.now(timezone.utc).date()
-        modified_from = (today - timedelta(days=3650)).strftime("%Y-%m-%dT%H:%M:%S")
+    def _search_products(self, page: int = 1, max_rows: int = 100, is_active: int | None = None) -> Dict[str, Any]:
+        modified_from = "1900-01-01T00:00:00"
         modified_to = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
 
-        attempts = [
-            {"IsActive": True, "DateModifiedFrom": modified_from, "DateModifiedTo": modified_to},
-            {"DateModifiedFrom": modified_from, "DateModifiedTo": modified_to},
-            {"IsActive": True},
-            {},
-        ]
+        attempts = []
+        if is_active is not None:
+            attempts.extend(
+                [
+                    {"IsActive": is_active, "DateModifiedFrom": modified_from, "DateModifiedTo": modified_to},
+                    {"IsActive": is_active},
+                ]
+            )
+        attempts.extend(
+            [
+                {"DateModifiedFrom": modified_from, "DateModifiedTo": modified_to},
+                {},
+            ]
+        )
         last_exc: Exception | None = None
         for payload in attempts:
             request = {
@@ -380,7 +388,11 @@ class WineDirectClient:
                 request["WebsiteIDs"] = website_ids
             try:
                 result = self.product_client.service.SearchProducts(Request=request)
-                return serialize_object(result) or {}
+                data = serialize_object(result) or {}
+                # If a filtered request returns no products, try a looser payload.
+                if payload and not self._extract_products(data):
+                    continue
+                return data
             except Fault as exc:
                 last_exc = exc
                 continue
@@ -392,8 +404,12 @@ class WineDirectClient:
     def _extract_products(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         products = response.get("Products") or response.get("Product") or []
         if isinstance(products, dict):
-            if "Products" in products:
+            if "Product" in products:
+                products = products["Product"]
+            elif "Products" in products:
                 products = products["Products"]
+            else:
+                products = [products]
         if isinstance(products, dict):
             products = [products]
         return products or []
@@ -432,6 +448,22 @@ class WineDirectClient:
         def _get(key: str, fallback: Any = 0):
             return order_info.get(key, order.get(key, fallback))
 
+        def _clean_number(value: Any) -> str:
+            if value is None:
+                return ""
+            if isinstance(value, float):
+                if value.is_integer():
+                    return str(int(value))
+                return str(value)
+            text = str(value).strip()
+            try:
+                num = float(text)
+            except ValueError:
+                return text
+            if num.is_integer():
+                return str(int(num))
+            return text
+
         total = self._safe_float(_get("Total") or _get("OrderTotal") or 0)
         taxes = self._safe_float(_get("Tax") or _get("TaxTotal") or _get("OrderTax") or 0)
         shipping = self._safe_float(_get("Shipping") or _get("ShippingTotal") or 0)
@@ -440,7 +472,7 @@ class WineDirectClient:
 
         return {
             "order_id": str(_get("OrderID", order.get("OrderID")) or ""),
-            "order_number": str(_get("OrderNumber", order.get("OrderNumber")) or ""),
+            "order_number": _clean_number(_get("OrderNumber", order.get("OrderNumber"))),
             "completed_date": self._safe_date(_get("DateCompleted") or _get("CompletedDate") or ""),
             "submitted_date": self._safe_date(_get("DateSubmitted") or _get("SubmittedDate") or ""),
             "date_modified": self._safe_date(_get("DateModified") or ""),
@@ -480,7 +512,7 @@ class WineDirectClient:
             "is_pending_pickup": str(_get("IsPendingPickup") or "").lower() in ("true", "1", "yes"),
             "is_arms_order": str(_get("IsARMSOrder") or "").lower() in ("true", "1", "yes"),
             "pickup": str(_get("IsAPickupOrder") or _get("Pickup") or "").lower() in ("yes", "true", "1"),
-            "order_number_long": _get("OrderNumberLong") or "",
+            "order_number_long": _clean_number(_get("OrderNumberLong") or ""),
             "pickup_date": self._safe_date(_get("PickupDate") or ""),
             "pickup_location_code": _get("PickupLocationCode") or "",
             "payment_terms": _get("PaymentTerms") or "",

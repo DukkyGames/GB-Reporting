@@ -1,7 +1,46 @@
 ﻿{% extends "base.html" %}
 
 {% block controls %}
-  <a class="ghost-btn" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+  <form class="filter-form" method="get" action="{{ url_for('inventory') }}">
+    <label>
+      Search SKU
+      <input type="text" name="q" placeholder="e.g. 19.CS" value="{{ query }}" />
+    </label>
+    <label>
+      Min Total
+      <input type="number" name="min_total" min="0" step="1" value="{{ min_total }}" />
+    </label>
+    <label>
+      Min Barn
+      <input type="number" name="min_barn" min="0" step="1" value="{{ min_barn }}" />
+    </label>
+    <label>
+      Min Warehouse
+      <input type="number" name="min_warehouse" min="0" step="1" value="{{ min_warehouse }}" />
+    </label>
+    <label>
+      Min Library
+      <input type="number" name="min_library" min="0" step="1" value="{{ min_library }}" />
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} />
+      Hide Zero
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" name="only_barn" value="1" {% if only_barn %}checked{% endif %} />
+      Barn Only
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" name="only_warehouse" value="1" {% if only_warehouse %}checked{% endif %} />
+      Warehouse Only
+    </label>
+    <label class="inline-check">
+      <input type="checkbox" name="only_library" value="1" {% if only_library %}checked{% endif %} />
+      Library Only
+    </label>
+    <button type="submit" class="primary-btn">Apply</button>
+    <a class="ghost-btn" href="{{ url_for('inventory') }}">Reset</a>
+  </form>
 {% endblock %}
 
 {% block content %}
@@ -15,24 +54,26 @@
         <thead>
           <tr>
             <th>SKU</th>
-            <th>Inventory Pool</th>
-            <th>Pool ID</th>
-            <th>Website</th>
-            <th>On Hand</th>
+            <th>Product Name</th>
+            {% if show_barn %}<th>Barn</th>{% endif %}
+            {% if show_warehouse %}<th>Warehouse</th>{% endif %}
+            {% if show_library %}<th>Library</th>{% endif %}
+            <th>Total</th>
           </tr>
         </thead>
         <tbody>
           {% for row in inventory %}
             <tr>
               <td>{{ row['sku'] }}</td>
-              <td>{{ row['inventory_pool'] }}</td>
-              <td class="mono">{{ row['inventory_pool_id'] }}</td>
-              <td class="mono">{{ row['website_id'] }}</td>
-              <td>{{ row['current_inventory'] }}</td>
+              <td>{{ row['name'] }}</td>
+              {% if show_barn %}<td>{{ "%.0f"|format(row['barn']) }}</td>{% endif %}
+              {% if show_warehouse %}<td>{{ "%.0f"|format(row['warehouse']) }}</td>{% endif %}
+              {% if show_library %}<td>{{ "%.0f"|format(row['library']) }}</td>{% endif %}
+              <td>{{ "%.0f"|format(row['total']) }}</td>
             </tr>
           {% else %}
             <tr>
-              <td colspan="5">No inventory records found.</td>
+              <td colspan="6">No inventory records found.</td>
             </tr>
           {% endfor %}
         </tbody>
