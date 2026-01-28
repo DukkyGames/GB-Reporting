@@ -1,5 +1,33 @@
 {% extends "base.html" %}
 
+{% block controls %}
+  <form class="filter-form" method="get" action="{{ url_for('tours') }}" data-autosubmit>
+    <input type="hidden" name="range" value="{{ range_key }}" />
+    <input type="hidden" name="start" value="{{ start_date }}" />
+    <input type="hidden" name="end" value="{{ end_date }}" />
+    <input type="hidden" name="experiences" id="experience-filter" value="{{ selected_experiences|join(',') }}" />
+    <div class="multi-select" data-dropdown>
+      <button type="button" class="ghost-btn" data-dropdown-trigger>
+        Filter Experiences
+      </button>
+      <div class="multi-select-menu" data-dropdown-menu>
+        <label class="multi-select-all">
+          <input type="checkbox" data-select-all />
+          All Experiences
+        </label>
+        <div class="multi-select-options">
+          {% for option in experience_options %}
+            <label>
+              <input type="checkbox" value="{{ option }}" {% if option in selected_experiences %}checked{% endif %} />
+              {{ option }}
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </form>
+{% endblock %}
+
 {% block content %}
   {% if report.empty %}
     <section class="panel">
@@ -100,8 +128,58 @@
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
   <script>
     (function () {
+      const dropdown = document.querySelector("[data-dropdown]");
+      if (dropdown) {
+        const trigger = dropdown.querySelector("[data-dropdown-trigger]");
+        const menu = dropdown.querySelector("[data-dropdown-menu]");
+        const hidden = document.getElementById("experience-filter");
+        const checkboxes = Array.from(menu.querySelectorAll("input[type='checkbox']")).filter((el) => !el.hasAttribute("data-select-all"));
+        const selectAll = menu.querySelector("[data-select-all]");
+
+        const syncHidden = () => {
+          const values = checkboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+          hidden.value = values.join(",");
+          if (selectAll) {
+            selectAll.checked = values.length === checkboxes.length;
+          }
+        };
+
+        if (selectAll) {
+          selectAll.addEventListener("change", () => {
+            const checked = selectAll.checked;
+            checkboxes.forEach((cb) => {
+              cb.checked = checked;
+            });
+            syncHidden();
+          });
+        }
+
+        checkboxes.forEach((cb) => {
+          cb.addEventListener("change", syncHidden);
+        });
+
+        trigger.addEventListener("click", () => {
+          menu.classList.toggle("open");
+        });
+
+        document.addEventListener("click", (event) => {
+          if (!dropdown.contains(event.target)) {
+            menu.classList.remove("open");
+          }
+        });
+
+        syncHidden();
+      }
+
       const charts = {{ report.charts | default({}) | tojson }};
       if (!charts || !charts.monthly) return;
+      const fullExperienceLabels = charts.experiences?.labels || [];
+      const truncateLabel = (label, maxLen = 28) => {
+        if (!label) return "";
+        if (label.length <= maxLen) return label;
+        return label.slice(0, Math.max(0, maxLen - 1)) + "…";
+      };
+      const shortExperienceLabels = fullExperienceLabels.map((label) => truncateLabel(label));
 
       Plotly.newPlot(
         "tours-monthly",
@@ -152,15 +230,17 @@
         [
           {
             x: charts.experiences.bookings || [],
-            y: charts.experiences.labels || [],
+            y: shortExperienceLabels,
             type: "bar",
             orientation: "h",
             marker: { color: "#0b6c7c" },
+            customdata: fullExperienceLabels,
+            hovertemplate: "%{customdata}<br>%{x} bookings<extra></extra>",
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 30, l: 120 },
-          yaxis: { autorange: "reversed" },
+          margin: { t: 10, r: 10, b: 30, l: 180 },
+          yaxis: { autorange: "reversed", automargin: true },
         },
         { displayModeBar: false, responsive: true }
       );
@@ -170,17 +250,18 @@
         [
           {
             x: charts.experiences.sales || [],
-            y: charts.experiences.labels || [],
+            y: shortExperienceLabels,
             type: "bar",
             orientation: "h",
             marker: { color: "#7dd3d6" },
-            hovertemplate: "%{y}<br>$%{x:,.2f}<extra></extra>",
+            customdata: fullExperienceLabels,
+            hovertemplate: "%{customdata}<br>$%{x:,.2f}<extra></extra>",
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 30, l: 120 },
+          margin: { t: 10, r: 10, b: 30, l: 180 },
           xaxis: { tickprefix: "$" },
-          yaxis: { autorange: "reversed" },
+          yaxis: { autorange: "reversed", automargin: true },
         },
         { displayModeBar: false, responsive: true }
       );

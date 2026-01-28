@@ -223,7 +223,24 @@ def _parse_int(value: str | None) -> int:
         return 0
 
 
-def _tours_report(start_date: date, end_date: date) -> dict:
+def _clean_experience(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = value.replace(" - Ranch Tour and Tasting", "").strip()
+    return cleaned
+
+
+def _tours_experiences() -> list[str]:
+    db = get_db(DB_PATH)
+    rows = db.execute(
+        "SELECT DISTINCT experience FROM tock_transactions WHERE experience IS NOT NULL AND experience != ''"
+    ).fetchall()
+    db.close()
+    values = sorted({_clean_experience(row[0]) for row in rows if _clean_experience(row[0])})
+    return values
+
+
+def _tours_report(start_date: date, end_date: date, experience_filter: list[str] | None = None) -> dict:
     db = get_db(DB_PATH)
     df = pd.read_sql_query(
         """
@@ -249,8 +266,15 @@ def _tours_report(start_date: date, end_date: date) -> dict:
     if df.empty:
         return {"empty": True}
 
+    df["experience"] = df["experience"].apply(_clean_experience)
+
     df = df.sort_values("transaction_date")
     df_latest = df.drop_duplicates(subset=["confirmation_code"], keep="last")
+    if experience_filter:
+        allowed = {value for value in experience_filter if value}
+        df_latest = df_latest[df_latest["experience"].isin(allowed)]
+        if df_latest.empty:
+            return {"empty": True}
 
     total_bookings = len(df_latest)
     total_guests = int(df_latest["party_size"].fillna(0).sum())
@@ -327,6 +351,7 @@ def _tours_report(start_date: date, end_date: date) -> dict:
     return {
         "empty": False,
         "kpis": kpis,
+        "collected_total": collected,
         "charts": charts,
         "table": table,
     }
@@ -512,8 +537,51 @@ def dashboard():
     unit_label = "Cases" if unit == "case" else "Bottles"
     unit_factor = 12 if unit == "case" else 1
     if not report.get("empty"):
+        tours_collected = 0.0
+        if tours_report and not tours_report.get("empty"):
+            tours_collected = tours_report.get("collected_total")
+            if isinstance(tours_collected, list):
+                tours_collected = sum(float(value or 0) for value in tours_collected)
+            tours_collected = float(tours_collected or 0)
         updated_kpis = []
+        peak_value = None
+        low_value = None
+        if is_single_month and report.get("charts", {}).get("monthly", {}).get("labels"):
+            labels = report["charts"]["monthly"]["labels"]
+            net_sales = report["charts"]["monthly"].get("net_sales", [])
+            tours_collected_by_label = {}
+            if tours_report and not tours_report.get("empty"):
+                tours_monthly = tours_report.get("charts", {}).get("monthly", {})
+                tours_labels = tours_monthly.get("labels", [])
+                tours_collected_series = tours_monthly.get("collected", [])
+                tours_collected_by_label = {
+                    label: float(value or 0) for label, value in zip(tours_labels, tours_collected_series)
+                }
+            if net_sales:
+                combined = [
+                    float(net_sales[idx] or 0) + tours_collected_by_label.get(labels[idx], 0.0)
+                    for idx in range(len(net_sales))
+                ]
+                max_idx = combined.index(max(combined))
+                min_idx = combined.index(min(combined))
+                peak_value = f"Peak Day: {labels[max_idx]} (${combined[max_idx]:,.0f})"
+                low_value = f"Lowest Day: {labels[min_idx]} (${combined[min_idx]:,.0f})"
         for label, value in report.get("kpis", []):
+            if label == "Net Sales":
+                label = "Product Net Sales"
+            if label == "Total Collected" and tours_collected:
+                try:
+                    raw_total = float(str(value).replace("$", "").replace(",", ""))
+                    value = f"${raw_total + tours_collected:,.0f}"
+                    label = "Total Collected (Wine + Tours)"
+                except ValueError:
+                    pass
+            if label == "Peak Month" and peak_value:
+                label = "Best Day"
+                value = peak_value.replace("Peak Day: ", "")
+            if label == "Lowest Month" and low_value:
+                label = "Lowest Day"
+                value = low_value.replace("Lowest Day: ", "")
             if label == "Bottles Sold":
                 if unit == "case":
                     try:
@@ -669,10 +737,15 @@ def tours():
     if start_date and end_date and start_date > end_date:
         start_date, end_date = end_date, start_date
 
-    report = _tours_report(start_date, end_date)
+    raw_filters = request.args.get("experiences", "")
+    selected = [value.strip() for value in raw_filters.split(",") if value.strip()]
+    report = _tours_report(start_date, end_date, experience_filter=selected)
+    experience_options = _tours_experiences()
     return render_template(
         "tours.html",
         report=report,
+        experience_options=experience_options,
+        selected_experiences=selected,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),

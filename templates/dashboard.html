@@ -10,12 +10,13 @@
     <section class="panel kpi-panel">
       <div class="panel-head">
         <h2>Financial Snapshot</h2>
-        <p>Core KPIs generated from WineDirect orders</p>
       </div>
       <div class="kpi-grid">
         {% set kpi_icons = {
           "Net Sales": "icons/Net Sales.png",
+          "Product Net Sales": "icons/Net Sales.png",
           "Total Collected": "icons/Total Collected.png",
+          "Total Collected (Wine + Tours)": "icons/Total Collected.png",
           "Orders": "icons/Orders.png",
           "Bottles Sold": "icons/Units Sold.png",
           "Cases Sold": "icons/Units Sold.png",
@@ -30,7 +31,10 @@
           "Pickup Orders": "icons/Pickup orders.png",
           "Taxes Collected": "icons/Taxes Collected.png",
           "Peak Month": "icons/Peak Month.png",
+          "Best Day": "icons/Peak Month.png",
           "Lowest Month": "icons/Lowest month.png"
+          ,
+          "Lowest Day": "icons/Lowest month.png"
         } %}
         {% for label, value in report.kpis %}
           <div class="kpi-tile">
@@ -51,7 +55,6 @@
       <section class="panel kpi-panel">
         <div class="panel-head">
           <h2>Tour Bookings Snapshot</h2>
-          <p>Bookings, guests, and collected for the selected range</p>
         </div>
         <div class="kpi-grid">
           {% for label, value in tours_report.kpis %}

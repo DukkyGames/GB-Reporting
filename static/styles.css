@@ -257,6 +257,56 @@ body {
   color: var(--ink);
 }
 
+.multi-select {
+  position: relative;
+}
+
+.multi-select .ghost-btn {
+  color: var(--teal-dark);
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.multi-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 12px;
+  display: none;
+  z-index: 20;
+}
+
+.multi-select-menu.open {
+  display: block;
+}
+
+.multi-select-menu label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.multi-select-options {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.multi-select-all {
+  font-weight: 600;
+}
+
 .inline-check input {
   margin: 0;
 }
