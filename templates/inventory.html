@@ -1,7 +1,7 @@
 ﻿{% extends "base.html" %}
 
 {% block controls %}
-  <form class="filter-form" method="get" action="{{ url_for('inventory') }}">
+  <form class="filter-form" method="get" action="{{ url_for('inventory') }}" data-autosubmit>
     <label>
       Search SKU
       <input type="text" name="q" placeholder="e.g. 19.CS" value="{{ query }}" />
@@ -23,6 +23,14 @@
       <input type="number" name="min_library" min="0" step="1" value="{{ min_library }}" />
     </label>
     <label class="inline-check">
+      <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
+      Bottles
+    </label>
+    <label class="inline-check">
+      <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
+      Cases
+    </label>
+    <label class="inline-check">
       <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} />
       Hide Zero
     </label>
@@ -38,7 +46,6 @@
       <input type="checkbox" name="only_library" value="1" {% if only_library %}checked{% endif %} />
       Library Only
     </label>
-    <button type="submit" class="primary-btn">Apply</button>
     <a class="ghost-btn" href="{{ url_for('inventory') }}">Reset</a>
   </form>
 {% endblock %}

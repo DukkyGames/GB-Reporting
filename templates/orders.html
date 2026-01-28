@@ -1,12 +1,57 @@
 {% extends "base.html" %}
 
 {% block controls %}
-  <form class="date-form" method="get" action="{{ url_for('orders') }}">
+  <form class="filter-form" method="get" action="{{ url_for('orders') }}" data-autosubmit>
     <label>
       Search
       <input type="text" name="q" placeholder="Order ID, order #, customer" value="{{ query }}" />
     </label>
-    <button type="submit" class="primary-btn">Search</button>
+    <label>
+      Start
+      <input type="date" name="start" value="{{ start_date }}" />
+    </label>
+    <label>
+      End
+      <input type="date" name="end" value="{{ end_date }}" />
+    </label>
+    <label>
+      Order Type
+      <select name="order_type">
+        <option value="">All</option>
+        {% for value in order_types %}
+          <option value="{{ value }}" {% if order_type == value %}selected{% endif %}>{{ value }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      Status
+      <input type="text" name="order_status" value="{{ order_status }}" />
+    </label>
+    <label>
+      State
+      <input type="text" name="ship_state" value="{{ ship_state }}" />
+    </label>
+    <label>
+      Min Total
+      <input type="number" name="min_total" step="0.01" value="{{ min_total }}" />
+    </label>
+    <label>
+      Max Total
+      <input type="number" name="max_total" step="0.01" value="{{ max_total }}" />
+    </label>
+    <label class="inline-check">
+      <input type="radio" name="pickup" value="" {% if pickup == "" %}checked{% endif %} />
+      All
+    </label>
+    <label class="inline-check">
+      <input type="radio" name="pickup" value="pickup" {% if pickup == "pickup" %}checked{% endif %} />
+      Pickup
+    </label>
+    <label class="inline-check">
+      <input type="radio" name="pickup" value="ship" {% if pickup == "ship" %}checked{% endif %} />
+      Shipped
+    </label>
+    <a class="ghost-btn" href="{{ url_for('orders') }}">Reset</a>
   </form>
 {% endblock %}
 
@@ -24,8 +69,10 @@
             <th>Completed</th>
             <th>Customer</th>
             <th>Type</th>
+            <th>Status</th>
             <th>State</th>
             <th>Total</th>
+            <th>Pickup</th>
           </tr>
         </thead>
         <tbody>
@@ -33,14 +80,16 @@
             <tr>
               <td><a href="{{ url_for('order_detail', order_id=order['order_id']) }}">{{ order['order_number'] }}</a></td>
               <td>{{ order['completed_date'] }}</td>
-              <td class="mono">{{ order['bill_first_name'] }} {{ order['bill_last_name']}}</td>
+              <td>{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}</td>
               <td>{{ order['order_type'] }}</td>
+              <td>{{ order['order_status'] }}</td>
               <td>{{ order['ship_state'] }}</td>
               <td>${{ "%.2f"|format(order['order_total'] or 0) }}</td>
+              <td>{{ "Yes" if order['pickup'] else "No" }}</td>
             </tr>
           {% else %}
             <tr>
-              <td colspan="7">No orders found.</td>
+              <td colspan="8">No orders found.</td>
             </tr>
           {% endfor %}
         </tbody>

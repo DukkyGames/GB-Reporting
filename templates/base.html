@@ -54,6 +54,127 @@
     <span>Powered by Grimmedia</span>
   </footer>
 
+  <script>
+    function getCellValue(row, idx) {
+      const cell = row.children[idx];
+      return cell ? cell.textContent.trim() : "";
+    }
+
+    function parseValue(value) {
+      const cleaned = value.replace(/[$,%]/g, "").replace(/\s+/g, " ").trim();
+      const num = Number(cleaned);
+      if (!Number.isNaN(num) && cleaned !== "") {
+        return num;
+      }
+      return value.toLowerCase();
+    }
+
+    function sortTable(table, idx, asc) {
+      const tbody = table.tBodies[0];
+      if (!tbody) return;
+      const rows = Array.from(tbody.rows).filter((row) => !row.classList.contains("total-row"));
+      const totalRows = Array.from(tbody.rows).filter((row) => row.classList.contains("total-row"));
+      rows.sort((a, b) => {
+        const aVal = parseValue(getCellValue(a, idx));
+        const bVal = parseValue(getCellValue(b, idx));
+        if (aVal < bVal) return asc ? -1 : 1;
+        if (aVal > bVal) return asc ? 1 : -1;
+        return 0;
+      });
+      rows.forEach((row) => tbody.appendChild(row));
+      totalRows.forEach((row) => tbody.appendChild(row));
+    }
+
+    function initSortableTables() {
+      document.querySelectorAll("table").forEach((table) => {
+        const headers = table.tHead ? Array.from(table.tHead.rows[0].cells) : [];
+        headers.forEach((th, idx) => {
+          th.classList.add("sortable");
+          th.addEventListener("click", () => {
+            const asc = th.getAttribute("data-sort") !== "asc";
+            headers.forEach((h) => h.removeAttribute("data-sort"));
+            th.setAttribute("data-sort", asc ? "asc" : "desc");
+            sortTable(table, idx, asc);
+          });
+        });
+      });
+    }
+
+    function initAutoSubmitForms() {
+      document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
+        const storageKey = `filters:${window.location.pathname}`;
+        let timer = null;
+
+        const loadSaved = () => {
+          if (window.location.search) {
+            return;
+          }
+          const raw = window.localStorage.getItem(storageKey);
+          if (!raw) return;
+          try {
+            const data = JSON.parse(raw);
+            form.querySelectorAll("input, select").forEach((field) => {
+              if (!(field.name in data)) return;
+              if (field.type === "checkbox") {
+                field.checked = Boolean(data[field.name]);
+              } else if (field.type === "radio") {
+                field.checked = String(data[field.name]) === field.value;
+              } else {
+                field.value = data[field.name];
+              }
+            });
+          } catch (err) {
+            // Ignore malformed stored data.
+          }
+        };
+
+        const saveCurrent = () => {
+          const payload = {};
+          form.querySelectorAll("input, select").forEach((field) => {
+            if (!field.name) return;
+            if (field.type === "checkbox") {
+              payload[field.name] = field.checked;
+            } else if (field.type === "radio") {
+              if (field.checked) {
+                payload[field.name] = field.value;
+              }
+            } else {
+              payload[field.name] = field.value;
+            }
+          });
+          window.localStorage.setItem(storageKey, JSON.stringify(payload));
+        };
+
+        const submitForm = () => {
+          if (timer) {
+            clearTimeout(timer);
+          }
+          saveCurrent();
+          form.requestSubmit();
+        };
+
+        loadSaved();
+        form.querySelectorAll("input, select").forEach((field) => {
+          field.addEventListener("change", submitForm);
+          field.addEventListener("input", () => {
+            if (timer) {
+              clearTimeout(timer);
+            }
+            timer = setTimeout(() => {
+              saveCurrent();
+              form.requestSubmit();
+            }, 400);
+          });
+        });
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      initSortableTables();
+      initAutoSubmitForms();
+    });
+  </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

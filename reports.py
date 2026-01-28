@@ -35,16 +35,19 @@ def _fig_to_base64(fig) -> str:
 def _load_data(db_path: str, start_date: date, end_date: date) -> tuple[pd.DataFrame, pd.DataFrame]:
     db = get_db(db_path)
     orders = pd.read_sql_query(
-        "SELECT * FROM orders WHERE date(completed_date) BETWEEN ? AND ?",
+        "SELECT * FROM orders",
         db,
-        params=(start_date.isoformat(), end_date.isoformat()),
     )
     items = pd.read_sql_query(
-        "SELECT * FROM order_items WHERE order_id IN (SELECT order_id FROM orders WHERE date(completed_date) BETWEEN ? AND ?) ",
+        "SELECT * FROM order_items",
         db,
-        params=(start_date.isoformat(), end_date.isoformat()),
     )
     db.close()
+    orders["completed_date"] = pd.to_datetime(orders["completed_date"], errors="coerce")
+    orders["completed_local"] = orders["completed_date"].dt.date
+    mask = (orders["completed_local"] >= start_date) & (orders["completed_local"] <= end_date)
+    orders = orders[mask]
+    items = items[items["order_id"].isin(orders["order_id"])]
     return orders, items
 
 
@@ -62,9 +65,12 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     orders["completed_date"] = pd.to_datetime(orders["completed_date"], errors="coerce")
     orders["month"] = orders["completed_date"].dt.to_period("M").dt.to_timestamp()
 
+    for col in ("units", "sub_total", "order_total", "taxes"):
+        orders[col] = pd.to_numeric(orders[col], errors="coerce").fillna(0)
+
     total_orders = len(orders)
     total_units = orders["units"].sum()
-    net_sales = orders["net_sales"].sum()
+    net_sales = orders["sub_total"].sum()
     order_total = orders["order_total"].sum()
     taxes = orders["taxes"].sum()
     aov = net_sales / total_orders if total_orders else 0
@@ -79,7 +85,7 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     shipping_count = (orders["pickup"] == 0).sum()
 
     monthly = orders.groupby("month").agg(
-        net_sales=("net_sales", "sum"),
+        net_sales=("sub_total", "sum"),
         orders=("order_id", "count"),
         units=("units", "sum"),
     ).reset_index()
@@ -87,7 +93,7 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     peak_row = monthly.loc[monthly["net_sales"].idxmax()] if not monthly.empty else None
     low_row = monthly.loc[monthly["net_sales"].idxmin()] if not monthly.empty else None
 
-    channel = orders.groupby("order_type").agg(net_sales=("net_sales", "sum")).reset_index()
+    channel = orders.groupby("order_type").agg(net_sales=("sub_total", "sum")).reset_index()
     channel = channel[channel["net_sales"] > 0].sort_values("net_sales", ascending=False)
 
     top_rev = items.groupby(["sku", "product_name"]).agg(net_sales=("net_sales", "sum")).reset_index()
@@ -96,7 +102,7 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     top_units = items.groupby(["sku", "product_name"]).agg(units=("quantity", "sum")).reset_index()
     top_units = top_units.sort_values("units", ascending=False).head(10)
 
-    states = orders[orders["pickup"] == 0].groupby("ship_state").agg(net_sales=("net_sales", "sum")).reset_index()
+    states = orders[orders["pickup"] == 0].groupby("ship_state").agg(net_sales=("sub_total", "sum")).reset_index()
     states = states.sort_values("net_sales", ascending=False).head(10)
 
     kpis = [
@@ -119,14 +125,36 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     if low_row is not None:
         kpis.append(("Lowest Month", f"{low_row['month'].strftime('%b %Y')} ({_money0(low_row['net_sales'])})"))
 
-    charts = {
-        "monthly_net_sales": _chart_monthly_net_sales(monthly),
-        "orders_units": _chart_orders_units(monthly),
-        "sales_by_channel": _chart_sales_by_channel(channel),
-        "top_products_revenue": _chart_top_products(top_rev, "net_sales", "Top Products by Revenue"),
-        "top_products_units": _chart_top_products(top_units, "units", "Top Products by Units"),
-        "top_states": _chart_top_states(states),
-        "customer_mix": _chart_customer_mix(unique_customers, repeat_customers),
+    def _native_list(values, cast=float):
+        return [cast(v) for v in values]
+
+    chart_data = {
+        "monthly": {
+            "labels": [d.strftime("%b %Y") for d in monthly["month"]],
+            "net_sales": _native_list(monthly["net_sales"], float),
+            "orders": _native_list(monthly["orders"], int),
+            "units": _native_list(monthly["units"], float),
+        },
+        "sales_by_channel": {
+            "labels": channel["order_type"].fillna("Unknown").tolist(),
+            "values": _native_list(channel["net_sales"], float),
+        },
+        "top_products_revenue": {
+            "labels": ["  " + sku for sku in top_rev["sku"].fillna("Unknown").tolist()],
+            "values": _native_list(top_rev["net_sales"], float),
+        },
+        "top_products_units": {
+            "labels": top_units["sku"].fillna("Unknown").tolist(),
+            "values": _native_list(top_units["units"], float),
+        },
+        "top_states": {
+            "labels": states["ship_state"].fillna("Unknown").tolist(),
+            "values": _native_list(states["net_sales"], float),
+        },
+        "customer_mix": {
+            "labels": ["Repeat", "New"],
+            "values": [int(repeat_customers), int(max(unique_customers - repeat_customers, 0))],
+        },
     }
 
     table = [
@@ -141,33 +169,28 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
 
     return {
         "kpis": kpis,
-        "charts": charts,
+        "charts": chart_data,
         "monthly": monthly,
         "table": table,
         "empty": False,
     }
 
 
-def build_products_report(db_path: str, start_date: date, end_date: date) -> dict:
+def build_products_report(db_path: str, start_date: date, end_date: date, unit: str = "case") -> dict:
     db = get_db(db_path)
     orders = pd.read_sql_query(
-        "SELECT order_id, order_type FROM orders WHERE date(completed_date) BETWEEN ? AND ?",
+        "SELECT order_id, order_type, sub_total, completed_date FROM orders",
         db,
-        params=(start_date.isoformat(), end_date.isoformat()),
     )
     items = pd.read_sql_query(
         """
-        SELECT order_id, sku, product_name, quantity, net_sales, price
+        SELECT order_id, sku, product_name, title, quantity, net_sales, price
         FROM order_items
-        WHERE order_id IN (
-            SELECT order_id FROM orders WHERE date(completed_date) BETWEEN ? AND ?
-        )
         """,
         db,
-        params=(start_date.isoformat(), end_date.isoformat()),
     )
     inventory = pd.read_sql_query(
-        "SELECT sku, current_inventory FROM inventory",
+        "SELECT sku, current_inventory, inventory_pool FROM inventory",
         db,
     )
     db.close()
@@ -175,16 +198,39 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
     if orders.empty or items.empty:
         return {"empty": True, "skus": [], "top_skus": [], "inventory": []}
 
+    orders["completed_date"] = pd.to_datetime(orders["completed_date"], errors="coerce")
+    orders["completed_local"] = orders["completed_date"].dt.date
+    orders = orders[(orders["completed_local"] >= start_date) & (orders["completed_local"] <= end_date)]
+    if "payment_status" not in orders.columns:
+        orders["payment_status"] = ""
+    orders = orders.rename(columns={"sub_total": "order_net_sales"})
+    items = items[items["order_id"].isin(orders["order_id"])]
     merged = items.merge(orders, on="order_id", how="left")
     merged["sku"] = merged["sku"].fillna("")
     merged["product_name"] = merged["product_name"].fillna("")
+    merged["title"] = merged["title"].fillna("")
+    merged["product_name"] = merged.apply(
+        lambda row: row["product_name"] if row["product_name"] else row["title"], axis=1
+    )
     merged["quantity"] = pd.to_numeric(merged["quantity"], errors="coerce").fillna(0)
     merged["cases_sold"] = merged["quantity"] / 12
     merged["net_sales"] = pd.to_numeric(merged["net_sales"], errors="coerce").fillna(0)
     merged["price"] = pd.to_numeric(merged["price"], errors="coerce").fillna(0)
-    merged["calc_sales"] = merged["net_sales"]
-    missing_sales = merged["calc_sales"] <= 0
-    merged.loc[missing_sales, "calc_sales"] = merged.loc[missing_sales, "price"] * merged.loc[missing_sales, "quantity"]
+    merged["order_net_sales"] = pd.to_numeric(merged.get("order_net_sales", 0), errors="coerce").fillna(0)
+
+    # Allocate order-level net sales across items by price share, fallback to quantity share.
+    merged["line_value"] = merged["price"] * merged["quantity"]
+    value_by_order = merged.groupby("order_id")["line_value"].transform("sum")
+    qty_by_order = merged.groupby("order_id")["quantity"].transform("sum")
+    merged["calc_sales"] = 0.0
+    has_value = value_by_order > 0
+    merged.loc[has_value, "calc_sales"] = (
+        merged.loc[has_value, "order_net_sales"] * (merged.loc[has_value, "line_value"] / value_by_order[has_value])
+    )
+    has_qty = (~has_value) & (qty_by_order > 0)
+    merged.loc[has_qty, "calc_sales"] = (
+        merged.loc[has_qty, "order_net_sales"] * (merged.loc[has_qty, "quantity"] / qty_by_order[has_qty])
+    )
 
     grouped = (
         merged.groupby(["sku", "product_name", "order_type"], dropna=False)
@@ -192,8 +238,10 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
         .reset_index()
     )
     grouped["avg_sale"] = grouped.apply(
-        lambda row: row["net_sales"] / row["cases_sold"] if row["cases_sold"] else 0, axis=1
+        lambda row: row["net_sales"] / (row["cases_sold"] * 12) if row["cases_sold"] else 0, axis=1
     )
+    qty_factor = 1 if unit == "case" else 12
+    grouped["display_qty"] = grouped["cases_sold"] * qty_factor
 
     sku_totals = (
         grouped.groupby(["sku", "product_name"])
@@ -201,22 +249,27 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
         .reset_index()
     )
     sku_totals["avg_sale"] = sku_totals.apply(
-        lambda row: row["net_sales"] / row["cases_sold"] if row["cases_sold"] else 0, axis=1
+        lambda row: row["net_sales"] / (row["cases_sold"] * 12) if row["cases_sold"] else 0, axis=1
     )
+    sku_totals["display_qty"] = sku_totals["cases_sold"] * qty_factor
 
     skus = []
     for _, row in sku_totals.sort_values("cases_sold", ascending=False).iterrows():
         sku = row["sku"] or "Unknown SKU"
         name = row["product_name"] or sku
         rows = grouped[(grouped["sku"] == row["sku"]) & (grouped["product_name"] == row["product_name"])]
+        rows = rows.sort_values("cases_sold", ascending=False)
+        max_avg = rows["avg_sale"].max() if not rows.empty else 0
+        tol = 1e-6
         detail_rows = [
             {
                 "order_type": r["order_type"] or "Unknown",
                 "sku": r["sku"],
                 "name": r["product_name"] or r["sku"],
-                "cases_sold": float(r["cases_sold"]),
+                "cases_sold": float(r["display_qty"]),
                 "net_sales": float(r["net_sales"]),
                 "avg_sale": float(r["avg_sale"]),
+                "is_top_avg": abs(float(r["avg_sale"]) - float(max_avg)) <= tol if max_avg else False,
             }
             for _, r in rows.iterrows()
         ]
@@ -224,7 +277,7 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
             {
                 "sku": sku,
                 "name": name,
-                "total_cases": float(row["cases_sold"]),
+                "total_cases": float(row["display_qty"]),
                 "total_sales": float(row["net_sales"]),
                 "avg_sale": float(row["avg_sale"]),
                 "rows": detail_rows,
@@ -232,14 +285,34 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
         )
 
     top_skus = sku_totals.sort_values("cases_sold", ascending=False).head(15).to_dict("records")
+    for row in top_skus:
+        row["display_qty"] = row["cases_sold"] * qty_factor
     inventory_summary = []
     if not inventory.empty:
         inv = inventory.copy()
         inv["current_inventory"] = pd.to_numeric(inv["current_inventory"], errors="coerce").fillna(0)
+        inv = inv[~inv["inventory_pool"].fillna("").str.contains("library", case=False)]
         inventory_summary = (
             inv.groupby("sku")
             .agg(total_inventory=("current_inventory", "sum"))
             .reset_index()
+            .assign(total_inventory=lambda df: df["total_inventory"] / (12 if unit == "case" else 1))
+            .sort_values("total_inventory", ascending=False)
+            .head(30)
+            .to_dict("records")
+        )
+
+    label_summary = []
+    if not inventory.empty:
+        inv = inventory.copy()
+        inv["current_inventory"] = pd.to_numeric(inv["current_inventory"], errors="coerce").fillna(0)
+        inv = inv[~inv["inventory_pool"].fillna("").str.contains("library", case=False)]
+        inv["base_sku"] = inv["sku"].astype(str).str.replace(r"^\d{2}\.", "", regex=True)
+        label_summary = (
+            inv.groupby("base_sku")
+            .agg(total_inventory=("current_inventory", "sum"))
+            .reset_index()
+            .assign(total_inventory=lambda df: df["total_inventory"] / (12 if unit == "case" else 1))
             .sort_values("total_inventory", ascending=False)
             .head(30)
             .to_dict("records")
@@ -247,9 +320,12 @@ def build_products_report(db_path: str, start_date: date, end_date: date) -> dic
 
     return {
         "empty": False,
+        "unit": unit,
+        "unit_label": "Cases" if unit == "case" else "Bottles",
         "skus": skus,
         "top_skus": top_skus,
         "inventory": inventory_summary,
+        "inventory_labels": label_summary,
     }
 
 
@@ -266,7 +342,7 @@ def _chart_monthly_net_sales(monthly: pd.DataFrame) -> str:
 def _chart_orders_units(monthly: pd.DataFrame) -> str:
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.bar(monthly["month"], monthly["orders"], color="#7dd3d6", label="Orders")
-    ax.plot(monthly["month"], monthly["units"], marker="o", color="#f7b44a", label="Units")
+    ax.plot(monthly["month"], monthly["units"], marker="o", color="#f7b44a", label="Bottles")
     ax.set_title("Orders & Units")
     ax.tick_params(axis="x", labelrotation=0, labelsize=6)
     ax.legend(loc="upper left", frameon=True)

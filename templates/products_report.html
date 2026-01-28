@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block controls %}
-  <form class="date-form" method="get" action="{{ url_for('products_report') }}">
+  <form class="date-form" method="get" action="{{ url_for('products_report') }}" data-autosubmit>
     <label>
       Range
       <select name="range">
@@ -21,7 +21,15 @@
       End
       <input type="date" name="end" value="{{ end_date }}" />
     </label>
-    <button type="submit" class="primary-btn">Update</button>
+    <label class="inline-check">
+      <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
+      Cases
+    </label>
+    <label class="inline-check">
+      <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
+      Bottles
+    </label>
+    
   </form>
 {% endblock %}
 
@@ -57,26 +65,22 @@
                   <thead>
                     <tr>
                       <th>Order Type</th>
-                      <th>Product SKU</th>
-                      <th>Product Name</th>
-                      <th>Cases Sold</th>
+                      <th>{{ report.unit_label }} Sold</th>
                       <th>Net Sales</th>
-                      <th>Avg Sale</th>
+                      <th>Avg Bottle Price</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for row in sku.rows %}
-                      <tr>
+                      <tr class="{% if row.is_top_avg %}highlight-row{% endif %}">
                         <td>{{ row.order_type }}</td>
-                        <td>{{ row.sku }}</td>
-                        <td>{{ row.name }}</td>
                         <td>{{ "%.2f"|format(row.cases_sold) }}</td>
                         <td>${{ "%.2f"|format(row.net_sales) }}</td>
                         <td>${{ "%.2f"|format(row.avg_sale) }}</td>
                       </tr>
                     {% endfor %}
                     <tr class="total-row">
-                      <td colspan="3">TOTAL</td>
+                      <td>TOTAL</td>
                       <td>{{ "%.2f"|format(sku.total_cases) }}</td>
                       <td>${{ "%.2f"|format(sku.total_sales) }}</td>
                       <td>${{ "%.2f"|format(sku.avg_sale) }}</td>
@@ -98,15 +102,15 @@
               <thead>
                 <tr>
                   <th>SKU</th>
-                  <th>Cases</th>
-                  <th>Avg Sale</th>
+                  <th>{{ report.unit_label }}</th>
+                  <th>Avg Bottle</th>
                 </tr>
               </thead>
               <tbody>
                 {% for row in report.top_skus %}
                   <tr>
                     <td>{{ row['sku'] }}</td>
-                    <td>{{ "%.2f"|format(row['cases_sold']) }}</td>
+                    <td>{{ "%.2f"|format(row['display_qty']) }}</td>
                     <td>${{ "%.2f"|format(row['avg_sale']) }}</td>
                   </tr>
                 {% endfor %}
@@ -114,6 +118,35 @@
             </table>
           </div>
         </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Inventory Available by Label</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Core SKU</th>
+                  <th>{{ report.unit_label }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in report.inventory_labels %}
+                  <tr>
+                    <td>{{ row['base_sku'] }}</td>
+                    <td class="inventory-heat" data-value="{{ row['total_inventory'] }}">{{ "%.2f"|format(row['total_inventory']) }}</td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="2">No label inventory data.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="panel">
           <div class="panel-head">
             <h3>Inventory Available</h3>
@@ -123,14 +156,14 @@
               <thead>
                 <tr>
                   <th>SKU</th>
-                  <th>Cases</th>
+                  <th>{{ report.unit_label }}</th>
                 </tr>
               </thead>
               <tbody>
                 {% for row in report.inventory %}
                   <tr>
                     <td>{{ row['sku'] }}</td>
-                    <td>{{ "%.2f"|format(row['total_inventory']) }}</td>
+                    <td class="inventory-heat" data-value="{{ row['total_inventory'] }}">{{ "%.2f"|format(row['total_inventory']) }}</td>
                   </tr>
                 {% else %}
                   <tr>
@@ -141,7 +174,33 @@
             </table>
           </div>
         </section>
+
+        
       </aside>
     </section>
   {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    (function () {
+      const cells = Array.from(document.querySelectorAll(".inventory-heat"));
+      if (!cells.length) return;
+      const values = cells
+        .map((cell) => Number.parseFloat(cell.dataset.value))
+        .filter((v) => Number.isFinite(v));
+      if (!values.length) return;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const range = max - min || 1;
+      cells.forEach((cell) => {
+        const value = Number.parseFloat(cell.dataset.value);
+        if (!Number.isFinite(value)) return;
+        const t = (value - min) / range;
+        const hue = 120 - 120 * t; // green (low) -> red (high)
+        cell.style.backgroundColor = `hsl(${hue}, 70%, 80%)`;
+      });
+    })();
+  </script>
 {% endblock %}

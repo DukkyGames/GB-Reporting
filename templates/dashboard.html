@@ -1,7 +1,7 @@
 ﻿{% extends "base.html" %}
 
 {% block controls %}
-  <form class="date-form" method="get" action="{{ url_for('dashboard') }}">
+  <form class="date-form" method="get" action="{{ url_for('dashboard') }}" data-autosubmit>
     <label>
       Range
       <select name="range">
@@ -21,7 +21,7 @@
       End
       <input type="date" name="end" value="{{ end_date }}" />
     </label>
-    <button type="submit" class="primary-btn">Update</button>
+    
   </form>
 {% endblock %}
 
@@ -38,9 +38,29 @@
         <p>Core KPIs generated from WineDirect orders</p>
       </div>
       <div class="kpi-grid">
+        {% set kpi_icons = {
+          "Net Sales": "icons/Net Sales.png",
+          "Total Collected": "icons/Total Collected.png",
+          "Orders": "icons/Orders.png",
+          "Units Sold": "icons/Units Sold.png",
+          "Avg Order Value": "icons/Avg order value.png",
+          "Avg Bottle Price": "icons/Average Bottle Price.png",
+          "Unique Customers": "icons/Unique Customers.png",
+          "Repeat Rate": "icons/Repeat Rate.png",
+          "Avg Bottles / Customer": "icons/Average bottles Cust.png",
+          "Shipped Orders": "icons/Shipped orders.png",
+          "Pickup Orders": "icons/Pickup orders.png",
+          "Taxes Collected": "icons/Taxes Collected.png",
+          "Peak Month": "icons/Peak Month.png",
+          "Lowest Month": "icons/Lowest month.png"
+        } %}
         {% for label, value in report.kpis %}
           <div class="kpi-tile">
-            <div>
+            {% set icon = kpi_icons.get(label) %}
+            {% if icon %}
+              <img class="kpi-icon" src="{{ url_for('static', filename=icon) }}" alt="" />
+            {% endif %}
+            <div class="kpi-meta">
               <div class="kpi-value">{{ value }}</div>
               <div class="kpi-label">{{ label }}</div>
             </div>
@@ -55,14 +75,14 @@
           <h3>Monthly Net Sales</h3>
           <p>Trend of net sales across the year</p>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.monthly_net_sales }}" alt="Monthly net sales" />
+        <div class="chart-plot" id="chart-monthly-net-sales"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
-          <h3>Orders & Units</h3>
-          <p>Orders (bars) and units (line) each month</p>
+          <h3>Orders & Bottles</h3>
+          <p>Orders (bars) and bottles (line) each month</p>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.orders_units }}" alt="Orders and units" />
+        <div class="chart-plot" id="chart-orders-units"></div>
       </div>
     </section>
 
@@ -71,19 +91,19 @@
         <div class="panel-head">
           <h3>Top Products by Revenue</h3>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_products_revenue }}" alt="Top products by revenue" />
+        <div class="chart-plot" id="chart-top-products-revenue"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
           <h3>Top Products by Units</h3>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_products_units }}" alt="Top products by units" />
+        <div class="chart-plot" id="chart-top-products-units"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
           <h3>Customer Mix</h3>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.customer_mix }}" alt="Customer mix" />
+        <div class="chart-plot" id="chart-customer-mix"></div>
       </div>
     </section>
 
@@ -92,13 +112,13 @@
         <div class="panel-head">
           <h3>Sales by Channel</h3>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.sales_by_channel }}" alt="Sales by channel" />
+        <div class="chart-plot" id="chart-sales-by-channel"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
           <h3>Top States (Shipped Orders)</h3>
         </div>
-        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_states }}" alt="Top states" />
+        <div class="chart-plot" id="chart-top-states"></div>
       </div>
     </section>
 
@@ -133,4 +153,168 @@
   {% endif %}
 {% endblock %}
 
-{% block scripts %}{% endblock %}
+{% block scripts %}
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script>
+    (function () {
+      const charts = {{ report.charts | tojson }};
+      if (!charts) return;
+      const monthLabels = charts.monthly.labels || [];
+      const netSales = charts.monthly.net_sales || [];
+      const orders = charts.monthly.orders || [];
+      const units = charts.monthly.units || [];
+
+      Plotly.newPlot(
+        "chart-monthly-net-sales",
+        [
+          {
+            x: monthLabels,
+            y: netSales,
+            type: "scatter",
+            mode: "lines+markers",
+            line: { color: "#0f8da0" },
+            fill: "tozeroy",
+            hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 40, l: 50 },
+          yaxis: { tickprefix: "$" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "chart-orders-units",
+        [
+          {
+            x: monthLabels,
+            y: orders,
+            type: "bar",
+            name: "Orders",
+            marker: { color: "#7dd3d6" },
+            hovertemplate: "%{x}<br>%{y} orders<extra></extra>",
+          },
+          {
+            x: monthLabels,
+            y: units,
+            type: "scatter",
+            mode: "lines+markers",
+            name: "bottles",
+            line: { color: "#f7b44a" },
+            hovertemplate: "%{x}<br>%{y} bottles<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 40, l: 50 },
+          barmode: "group",
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      const topRevenueValues = charts.top_products_revenue.values || [];
+      const topRevenueLabels = charts.top_products_revenue.labels || [];
+      const maxRevenue = topRevenueValues.length ? Math.max(...topRevenueValues) : 0;
+      const revenuePad = maxRevenue > 0 ? maxRevenue * 0.08 : 1;
+
+      Plotly.newPlot(
+        "chart-top-products-revenue",
+        [
+          {
+            x: topRevenueValues,
+            y: topRevenueLabels,
+            type: "bar",
+            orientation: "h",
+            marker: { color: "#5c8ef2" },
+            hovertemplate: "%{y}<br>$%{x:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 30, l: 80 },
+          xaxis: { tickprefix: "$", range: [-revenuePad, maxRevenue * 1.02], zeroline: false },
+          yaxis: { autorange: "reversed" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      const topUnitsValues = charts.top_products_units.values || [];
+      const topUnitsLabels = charts.top_products_units.labels || [];
+      const maxUnits = topUnitsValues.length ? Math.max(...topUnitsValues) : 0;
+      const unitsPad = maxUnits > 0 ? maxUnits * 0.05 : 1;
+
+      Plotly.newPlot(
+        "chart-top-products-units",
+        [
+          {
+            x: topUnitsValues,
+            y: topUnitsLabels,
+            type: "bar",
+            orientation: "h",
+            marker: { color: "#0b6c7c" },
+            hovertemplate: "%{y}<br>%{x} units<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 30, l: 80 },
+          xaxis: { range: [-unitsPad, maxUnits * 1.02], zeroline: false },
+          yaxis: { autorange: "reversed" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "chart-customer-mix",
+        [
+          {
+            labels: charts.customer_mix.labels || [],
+            values: charts.customer_mix.values || [],
+            type: "pie",
+            marker: { colors: ["#0f8da0", "#7dd3d6"] },
+            textinfo: "label+percent",
+            hovertemplate: "%{label}: %{value}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 10, l: 10 },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "chart-sales-by-channel",
+        [
+          {
+            x: charts.sales_by_channel.labels || [],
+            y: charts.sales_by_channel.values || [],
+            type: "bar",
+            marker: { color: "#0f8da0" },
+            hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 60, l: 50 },
+          yaxis: { tickprefix: "$" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "chart-top-states",
+        [
+          {
+            x: charts.top_states.labels || [],
+            y: charts.top_states.values || [],
+            type: "bar",
+            marker: { color: "#0b6c7c" },
+            hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 40, l: 50 },
+          yaxis: { tickprefix: "$" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+    })();
+  </script>
+{% endblock %}

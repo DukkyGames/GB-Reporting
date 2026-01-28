@@ -3,6 +3,7 @@
 import os
 import time
 from datetime import date, datetime, time as dt_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List
 
 import requests
@@ -15,6 +16,7 @@ from zeep.transports import Transport
 
 US_BASE = "https://webservices.vin65.com"
 AU_BASE = "https://webservices.aus.vin65.com"
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
 
 
 class TrackingTransport(Transport):
@@ -468,7 +470,8 @@ class WineDirectClient:
         taxes = self._safe_float(_get("Tax") or _get("TaxTotal") or _get("OrderTax") or 0)
         shipping = self._safe_float(_get("Shipping") or _get("ShippingTotal") or 0)
         tip = self._safe_float(_get("Tip") or 0)
-        net_sales = max(total - taxes - shipping - tip, 0)
+        sub_total = self._safe_float(_get("SubTotal") or 0)
+        net_sales = sub_total if sub_total else max(total - taxes - shipping - tip, 0)
 
         return {
             "order_id": str(_get("OrderID", order.get("OrderID")) or ""),
@@ -531,7 +534,7 @@ class WineDirectClient:
             "taxes": taxes,
             "shipping_paid": self._safe_float(_get("ShippingTotal") or _get("Shipping") or 0),
             "shipping": shipping,
-            "sub_total": self._safe_float(_get("SubTotal") or 0),
+            "sub_total": sub_total,
             "tip": tip,
             "total": total,
             "total_after_tip": self._safe_float(_get("TotalAfterTip") or 0),
@@ -604,7 +607,9 @@ class WineDirectClient:
         try:
             iso_text = text.replace("Z", "+00:00")
             dt = datetime.fromisoformat(iso_text)
-            return dt.date().isoformat()
+            if dt.tzinfo is None:
+                return dt.date().isoformat()
+            return dt.astimezone(PACIFIC_TZ).date().isoformat()
         except ValueError:
             pass
 

@@ -7,6 +7,7 @@ logging.getLogger("zeep.transports").setLevel(logging.DEBUG)
 
 
 import os
+from zoneinfo import ZoneInfo
 import json
 from datetime import datetime, timedelta, date, timezone
 from threading import Thread
@@ -90,9 +91,16 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def _default_dates() -> tuple[date, date]:
-    today = datetime.now(timezone.utc).date()
+    today = _report_today()
     start = date(_add_months(today, -11).year, _add_months(today, -11).month, 1)
     return start, today
+
+
+PACIFIC_TZ = ZoneInfo("America/Los_Angeles")
+
+
+def _report_today() -> date:
+    return datetime.now(PACIFIC_TZ).date()
 
 
 def _add_months(value: date, months: int) -> date:
@@ -184,7 +192,7 @@ def dashboard():
     start_date = _parse_date(request.args.get("start")) or start_default
     end_date = _parse_date(request.args.get("end")) or end_default
 
-    today = datetime.now(timezone.utc).date()
+    today = _report_today()
     if range_key == "this_month":
         start_date = date(today.year, today.month, 1)
         end_date = today
@@ -229,11 +237,12 @@ def cache_view():
 @login_required
 def products_report():
     range_key = request.args.get("range", "last_12_months")
+    unit = request.args.get("unit", "case")
     start_default, end_default = _default_dates()
     start_date = _parse_date(request.args.get("start")) or start_default
     end_date = _parse_date(request.args.get("end")) or end_default
 
-    today = datetime.now(timezone.utc).date()
+    today = _report_today()
     if range_key == "this_month":
         start_date = date(today.year, today.month, 1)
         end_date = today
@@ -257,13 +266,14 @@ def products_report():
     if start_date > end_date:
         start_date, end_date = end_date, start_date
 
-    report = build_products_report(DB_PATH, start_date, end_date)
+    report = build_products_report(DB_PATH, start_date, end_date, unit=unit)
     return render_template(
         "products_report.html",
         report=report,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
+        unit=unit,
     )
 
 
@@ -320,13 +330,17 @@ def inventory():
     only_barn = request.args.get("only_barn", "0") == "1"
     only_warehouse = request.args.get("only_warehouse", "0") == "1"
     only_library = request.args.get("only_library", "0") == "1"
+    unit = request.args.get("unit", "bottle")
+    per_case = 12
+    unit_divisor = per_case if unit == "case" else 1
 
     filtered = []
+    any_only = only_barn or only_warehouse or only_library
     for row in inventory:
-        total = row.get("total", 0)
-        barn = row.get("barn", 0)
-        warehouse = row.get("warehouse", 0)
-        library = row.get("library", 0)
+        total = row.get("total", 0) / unit_divisor
+        barn = row.get("barn", 0) / unit_divisor
+        warehouse = row.get("warehouse", 0) / unit_divisor
+        library = row.get("library", 0) / unit_divisor
 
         if query and query not in row.get("sku", "").lower():
             continue
@@ -340,13 +354,22 @@ def inventory():
             continue
         if library < min_library:
             continue
-        if only_barn and (barn <= 0 or warehouse > 0 or library > 0):
-            continue
-        if only_warehouse and (warehouse <= 0 or barn > 0 or library > 0):
-            continue
-        if only_library and (library <= 0 or barn > 0 or warehouse > 0):
-            continue
-        filtered.append(row)
+        if any_only:
+            matches_pool = False
+            if only_barn and barn > 0:
+                matches_pool = True
+            if only_warehouse and warehouse > 0:
+                matches_pool = True
+            if only_library and library > 0:
+                matches_pool = True
+            if not matches_pool:
+                continue
+        display_row = dict(row)
+        display_row["total"] = total
+        display_row["barn"] = barn
+        display_row["warehouse"] = warehouse
+        display_row["library"] = library
+        filtered.append(display_row)
 
     return render_template(
         "inventory.html",
@@ -363,6 +386,7 @@ def inventory():
         show_barn=not (only_warehouse or only_library),
         show_warehouse=not (only_barn or only_library),
         show_library=not (only_barn or only_warehouse),
+        unit=unit,
     )
 
 
@@ -370,30 +394,95 @@ def inventory():
 @login_required
 def orders():
     query = request.args.get("q", "").strip()
+    start_date = _parse_date(request.args.get("start"))
+    end_date = _parse_date(request.args.get("end"))
+    order_type = request.args.get("order_type", "").strip()
+    order_status = request.args.get("order_status", "").strip()
+    ship_state = request.args.get("ship_state", "").strip()
+    pickup = request.args.get("pickup", "").strip()
+    min_total = request.args.get("min_total", "").strip()
+    max_total = request.args.get("max_total", "").strip()
+
+    filters = []
+    params = []
+    if start_date and end_date:
+        filters.append("date(completed_date) BETWEEN ? AND ?")
+        params.extend([start_date.isoformat(), end_date.isoformat()])
+    elif start_date:
+        filters.append("date(completed_date) >= ?")
+        params.append(start_date.isoformat())
+    elif end_date:
+        filters.append("date(completed_date) <= ?")
+        params.append(end_date.isoformat())
+
+    if order_type:
+        filters.append("order_type = ?")
+        params.append(order_type)
+    if order_status:
+        filters.append("order_status = ?")
+        params.append(order_status)
+    if ship_state:
+        filters.append("ship_state = ?")
+        params.append(ship_state)
+    if pickup in ("pickup", "ship"):
+        filters.append("pickup = ?")
+        params.append(1 if pickup == "pickup" else 0)
+    if min_total:
+        filters.append("order_total >= ?")
+        params.append(min_total)
+    if max_total:
+        filters.append("order_total <= ?")
+        params.append(max_total)
+
     db = get_db(DB_PATH)
+    order_types = [row[0] for row in db.execute(
+        "SELECT DISTINCT order_type FROM orders WHERE order_type IS NOT NULL AND order_type != '' ORDER BY order_type"
+    ).fetchall()]
     if query:
         like = f"%{query}%"
-        rows = db.execute(
-            """
-            SELECT order_id, order_number, completed_date, customer_id, order_type, ship_state, order_total
-            FROM orders
-            WHERE order_id LIKE ? OR order_number LIKE ? OR customer_id LIKE ?
-            ORDER BY completed_date DESC
-            LIMIT 200
-            """,
-            (like, like, like),
-        ).fetchall()
+        filters.append("(order_id LIKE ? OR order_number LIKE ? OR customer_id LIKE ?)")
+        params.extend([like, like, like])
     else:
-        rows = db.execute(
-            """
-            SELECT order_id, order_number, completed_date, customer_id, order_type, ship_state, order_total
-            FROM orders
-            ORDER BY completed_date DESC
-            LIMIT 200
-            """
-        ).fetchall()
+        pass
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    rows = db.execute(
+        f"""
+        SELECT order_id, order_number, completed_date,
+               bill_first_name, bill_last_name, order_type, order_status, ship_state, order_total, pickup
+        FROM orders
+        {where_clause}
+        ORDER BY CAST(order_number AS INTEGER) DESC, order_number DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
     db.close()
-    return render_template("orders.html", orders=rows, query=query)
+    orders_rows = []
+    for row in rows:
+        completed_raw = str(row["completed_date"] or "")
+        if len(completed_raw) == 10:
+            completed_local = completed_raw
+        else:
+            try:
+                completed_dt = datetime.fromisoformat(completed_raw.replace("Z", "+00:00"))
+                completed_local = completed_dt.astimezone(PACIFIC_TZ).strftime("%Y-%m-%d")
+            except ValueError:
+                completed_local = completed_raw
+        orders_rows.append({**dict(row), "completed_date": completed_local})
+    return render_template(
+        "orders.html",
+        orders=orders_rows,
+        order_types=order_types,
+        query=query,
+        start_date=start_date.isoformat() if start_date else "",
+        end_date=end_date.isoformat() if end_date else "",
+        order_type=order_type,
+        order_status=order_status,
+        ship_state=ship_state,
+        pickup=pickup,
+        min_total=min_total,
+        max_total=max_total,
+    )
 
 
 @app.route("/orders/<order_id>", methods=["GET"])
