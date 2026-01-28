@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% if report.empty %}
+    <section class="panel">
+      <h2>No tour bookings data</h2>
+      <p>Upload a Tock transactions CSV to get started.</p>
+    </section>
+  {% else %}
+    <section class="panel kpi-panel">
+      <div class="panel-head">
+        <h2>Tour Booking KPIs</h2>
+        <p>Summary of bookings for the selected date range</p>
+      </div>
+      <div class="kpi-grid">
+        {% for label, value in report.kpis %}
+          <div class="kpi-tile">
+            <div class="kpi-meta">
+              <div class="kpi-value">{{ value }}</div>
+              <div class="kpi-label">{{ label }}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Bookings Over Time</h3>
+          <p>Monthly bookings and guests</p>
+        </div>
+        <div class="chart-plot" id="tours-monthly"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Revenue Over Time</h3>
+          <p>Monthly gross sales</p>
+        </div>
+        <div class="chart-plot" id="tours-sales"></div>
+      </div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Experiences (Bookings)</h3>
+        </div>
+        <div class="chart-plot" id="tours-experiences"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Experiences (Revenue)</h3>
+        </div>
+        <div class="chart-plot" id="tours-experience-sales"></div>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h3>Latest Bookings</h3>
+        <p>Showing up to 200 bookings from the current range</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Experience</th>
+              <th>Party Size</th>
+              <th>Total Price</th>
+              <th>Collected</th>
+              <th>Confirmation</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.table %}
+              <tr>
+                <td>{{ row.booking_date }}</td>
+                <td>{{ row.experience }}</td>
+                <td>{{ row.party_size }}</td>
+                <td>${{ "%.2f"|format(row.total_price) }}</td>
+                <td>${{ "%.2f"|format(row.payment_collected) }}</td>
+                <td class="mono">{{ row.confirmation_code }}</td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="6">No bookings for this range.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script>
+    (function () {
+      const charts = {{ report.charts | default({}) | tojson }};
+      if (!charts || !charts.monthly) return;
+
+      Plotly.newPlot(
+        "tours-monthly",
+        [
+          {
+            x: charts.monthly.labels || [],
+            y: charts.monthly.bookings || [],
+            type: "bar",
+            name: "Bookings",
+            marker: { color: "#0f8da0" },
+          },
+          {
+            x: charts.monthly.labels || [],
+            y: charts.monthly.guests || [],
+            type: "scatter",
+            mode: "lines+markers",
+            name: "Guests",
+            line: { color: "#f7b44a" },
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 40, l: 50 },
+          barmode: "group",
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "tours-sales",
+        [
+          {
+            x: charts.monthly.labels || [],
+            y: charts.monthly.sales || [],
+            type: "bar",
+            marker: { color: "#5c8ef2" },
+            hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 40, l: 50 },
+          yaxis: { tickprefix: "$" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "tours-experiences",
+        [
+          {
+            x: charts.experiences.bookings || [],
+            y: charts.experiences.labels || [],
+            type: "bar",
+            orientation: "h",
+            marker: { color: "#0b6c7c" },
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 30, l: 120 },
+          yaxis: { autorange: "reversed" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+
+      Plotly.newPlot(
+        "tours-experience-sales",
+        [
+          {
+            x: charts.experiences.sales || [],
+            y: charts.experiences.labels || [],
+            type: "bar",
+            orientation: "h",
+            marker: { color: "#7dd3d6" },
+            hovertemplate: "%{y}<br>$%{x:,.2f}<extra></extra>",
+          },
+        ],
+        {
+          margin: { t: 10, r: 10, b: 30, l: 120 },
+          xaxis: { tickprefix: "$" },
+          yaxis: { autorange: "reversed" },
+        },
+        { displayModeBar: false, responsive: true }
+      );
+    })();
+  </script>
+{% endblock %}

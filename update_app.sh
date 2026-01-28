@@ -6,6 +6,9 @@ SERVICE_NAME="gb-reporting"
 
 cd "$APP_DIR"
 
+# Remove python bytecode caches so git pull doesn't fail on pycache artifacts
+find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+
 git pull
 
 # Ensure venv exists

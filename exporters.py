@@ -343,3 +343,50 @@ def export_products_pdf(report: dict, start_date: date, end_date: date) -> Bytes
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+
+def export_tours_excel(report: dict, start_date: date, end_date: date) -> BytesIO:
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame(report.get("kpis", []), columns=["Metric", "Value"]).to_excel(writer, sheet_name="KPIs", index=False)
+        pd.DataFrame(report.get("table", [])).to_excel(writer, sheet_name="Bookings", index=False)
+        pd.DataFrame(
+            [{"start_date": start_date.isoformat(), "end_date": end_date.isoformat()}]
+        ).to_excel(writer, sheet_name="Filters", index=False)
+    output.seek(0)
+    return output
+
+
+def export_tours_pdf(report: dict, start_date: date, end_date: date) -> BytesIO:
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=0.5 * inch, rightMargin=0.5 * inch)
+    styles = _make_styles()
+
+    subtitle = f"{start_date.isoformat()} to {end_date.isoformat()}"
+    story = _header_story("Tour Bookings", subtitle, styles)
+
+    if report.get("kpis"):
+        story.append(Paragraph("Key Metrics", styles["Section"]))
+        rows = [["Metric", "Value"]] + [[label, value] for label, value in report["kpis"]]
+        story.append(_build_table(rows, col_widths=[2.6 * inch, 3.6 * inch]))
+        story.append(Spacer(1, 0.2 * inch))
+
+    if report.get("table"):
+        story.append(Paragraph("Latest Bookings", styles["Section"]))
+        rows = [["Date", "Experience", "Party Size", "Total Price", "Collected", "Confirmation"]]
+        for row in report["table"]:
+            rows.append(
+                [
+                    str(row.get("booking_date", "")),
+                    str(row.get("experience", "")),
+                    str(row.get("party_size", "")),
+                    f"${row.get('total_price', 0):,.2f}",
+                    f"${row.get('payment_collected', 0):,.2f}",
+                    str(row.get("confirmation_code", "")),
+                ]
+            )
+        story.append(_build_table(rows, col_widths=[0.9 * inch, 2.2 * inch, 0.8 * inch, 1.0 * inch, 1.0 * inch, 1.2 * inch]))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer

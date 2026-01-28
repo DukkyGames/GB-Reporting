@@ -47,6 +47,44 @@
       </div>
     </section>
 
+    {% if tours_report and not tours_report.empty %}
+      <section class="panel kpi-panel">
+        <div class="panel-head">
+          <h2>Tour Bookings Snapshot</h2>
+          <p>Bookings, guests, and collected for the selected range</p>
+        </div>
+        <div class="kpi-grid">
+          {% for label, value in tours_report.kpis %}
+            {% if label in ["Bookings", "Guests", "Collected"] %}
+              <div class="kpi-tile">
+                <div class="kpi-meta">
+                  <div class="kpi-value">{{ value }}</div>
+                  <div class="kpi-label">{{ label }}</div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="grid two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Tour Bookings & Guests</h3>
+            <p>Monthly bookings (bars) and guests (line)</p>
+          </div>
+          <div class="chart-plot" id="tours-dashboard-bookings"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Tour Collected</h3>
+            <p>Monthly collected revenue</p>
+          </div>
+          <div class="chart-plot" id="tours-dashboard-collected"></div>
+        </div>
+      </section>
+    {% endif %}
+
     <section class="grid two-col">
       <div class="panel">
         <div class="panel-head">
@@ -136,6 +174,7 @@
   <script>
     (function () {
       const charts = {{ report.charts | tojson }};
+      const toursCharts = {{ tours_report.charts | default({}) | tojson }};
       if (!charts) return;
       const monthLabels = charts.monthly.labels || [];
       const netSales = charts.monthly.net_sales || [];
@@ -294,6 +333,52 @@
         },
         { displayModeBar: false, responsive: true }
       );
+
+      if (toursCharts && toursCharts.monthly) {
+        Plotly.newPlot(
+          "tours-dashboard-bookings",
+          [
+            {
+              x: toursCharts.monthly.labels || [],
+              y: toursCharts.monthly.bookings || [],
+              type: "bar",
+              name: "Bookings",
+              marker: { color: "#0f8da0" },
+            },
+            {
+              x: toursCharts.monthly.labels || [],
+              y: toursCharts.monthly.guests || [],
+              type: "scatter",
+              mode: "lines+markers",
+              name: "Guests",
+              line: { color: "#f7b44a" },
+            },
+          ],
+          {
+            margin: { t: 10, r: 10, b: 40, l: 50 },
+            barmode: "group",
+          },
+          { displayModeBar: false, responsive: true }
+        );
+
+        Plotly.newPlot(
+          "tours-dashboard-collected",
+          [
+            {
+              x: toursCharts.monthly.labels || [],
+              y: toursCharts.monthly.collected || [],
+              type: "bar",
+              marker: { color: "#5c8ef2" },
+              hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
+            },
+          ],
+          {
+            margin: { t: 10, r: 10, b: 40, l: 50 },
+            yaxis: { tickprefix: "$" },
+          },
+          { displayModeBar: false, responsive: true }
+        );
+      }
     })();
   </script>
 {% endblock %}

@@ -34,7 +34,8 @@
       <a class="ghost-btn" href="{{ url_for('orders', range=current_range, start=current_start, end=current_end) }}">Orders</a>
       <a class="ghost-btn" href="{{ url_for('products_report', range=current_range, start=current_start, end=current_end) }}">Products Report</a>
       <a class="ghost-btn" href="{{ url_for('inventory', range=current_range, start=current_start, end=current_end) }}">Inventory</a>
-      <a class="ghost-btn" href="{{ url_for('cache_view', range=current_range, start=current_start, end=current_end) }}">Cache</a>
+      <a class="ghost-btn" href="{{ url_for('tours', range=current_range, start=current_start, end=current_end) }}">Tours</a>
+      <a class="ghost-btn" href="{{ url_for('settings', range=current_range, start=current_start, end=current_end) }}">Settings</a>
       <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
     </div>
     <form class="date-form" method="get" action="{{ request.path }}" data-autosubmit>

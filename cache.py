@@ -157,6 +157,38 @@ def init_db(path: str) -> None:
             key TEXT PRIMARY KEY,
             value TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS tock_transactions (
+            transaction_id TEXT PRIMARY KEY,
+            first_transaction_id TEXT,
+            confirmation_code TEXT,
+            action TEXT,
+            transaction_date TEXT,
+            booking_date TEXT,
+            realized_date TEXT,
+            experience TEXT,
+            party_size INTEGER,
+            price_per_person REAL,
+            sub_total REAL,
+            tax REAL,
+            service_charge REAL,
+            gratuity_charge REAL,
+            fees REAL,
+            charges REAL,
+            comp REAL,
+            discount REAL,
+            total_price REAL,
+            gift_card_value REAL,
+            payment_collected REAL,
+            payment_refunded REAL,
+            net_payout_amount REAL,
+            booking_method TEXT,
+            payment_type TEXT,
+            email TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            raw_json TEXT
+        );
         """
     )
     db.commit()
@@ -539,6 +571,93 @@ def clear_products_cache(path: str) -> None:
     db.execute("DELETE FROM products")
     db.commit()
     db.close()
+
+
+def clear_tock_transactions(path: str) -> None:
+    db = sqlite3.connect(path, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("DELETE FROM tock_transactions")
+    db.commit()
+    db.close()
+
+
+def upsert_tock_transactions(path: str, rows: Iterable[dict]) -> int:
+    db = sqlite3.connect(path, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    count = 0
+    for row in rows:
+        db.execute(
+            """
+            INSERT OR REPLACE INTO tock_transactions (
+                transaction_id,
+                first_transaction_id,
+                confirmation_code,
+                action,
+                transaction_date,
+                booking_date,
+                realized_date,
+                experience,
+                party_size,
+                price_per_person,
+                sub_total,
+                tax,
+                service_charge,
+                gratuity_charge,
+                fees,
+                charges,
+                comp,
+                discount,
+                total_price,
+                gift_card_value,
+                payment_collected,
+                payment_refunded,
+                net_payout_amount,
+                booking_method,
+                payment_type,
+                email,
+                first_name,
+                last_name,
+                raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.get("transaction_id"),
+                row.get("first_transaction_id"),
+                row.get("confirmation_code"),
+                row.get("action"),
+                row.get("transaction_date"),
+                row.get("booking_date"),
+                row.get("realized_date"),
+                row.get("experience"),
+                row.get("party_size"),
+                row.get("price_per_person"),
+                row.get("sub_total"),
+                row.get("tax"),
+                row.get("service_charge"),
+                row.get("gratuity_charge"),
+                row.get("fees"),
+                row.get("charges"),
+                row.get("comp"),
+                row.get("discount"),
+                row.get("total_price"),
+                row.get("gift_card_value"),
+                row.get("payment_collected"),
+                row.get("payment_refunded"),
+                row.get("net_payout_amount"),
+                row.get("booking_method"),
+                row.get("payment_type"),
+                row.get("email"),
+                row.get("first_name"),
+                row.get("last_name"),
+                row.get("raw_json"),
+            ),
+        )
+        count += 1
+    db.commit()
+    db.close()
+    return count
 
 
 def refresh_products_cache(path: str) -> None:

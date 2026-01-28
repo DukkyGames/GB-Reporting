@@ -10,6 +10,8 @@ import os
 from zoneinfo import ZoneInfo
 import json
 from datetime import datetime, timedelta, date, timezone
+import csv
+from io import TextIOWrapper
 from threading import Thread
 import traceback
 
@@ -28,11 +30,14 @@ from cache import (
     refresh_inventory_cache,
     clear_orders_cache,
     clear_products_cache,
+    clear_tock_transactions,
+    upsert_tock_transactions,
     rate_limit_check,
     set_cache_status,
     get_cache_status,
 )
 from reports import build_report, build_products_report
+import pandas as pd
 from exporters import (
     export_excel,
     export_pdf,
@@ -42,6 +47,8 @@ from exporters import (
     export_inventory_pdf,
     export_products_excel,
     export_products_pdf,
+    export_tours_excel,
+    export_tours_pdf,
 )
 
 load_dotenv()
@@ -192,6 +199,136 @@ def _apply_range_key(range_key: str, start_date: date | None, end_date: date | N
     return start_date, end_date
 
 
+def _parse_float(value: str | None) -> float:
+    if value is None:
+        return 0.0
+    cleaned = str(value).replace("$", "").replace(",", "").strip()
+    if cleaned == "":
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
+def _parse_int(value: str | None) -> int:
+    if value is None:
+        return 0
+    cleaned = str(value).replace(",", "").strip()
+    if cleaned == "":
+        return 0
+    try:
+        return int(float(cleaned))
+    except ValueError:
+        return 0
+
+
+def _tours_report(start_date: date, end_date: date) -> dict:
+    db = get_db(DB_PATH)
+    df = pd.read_sql_query(
+        """
+        SELECT *
+        FROM tock_transactions
+        WHERE booking_date IS NOT NULL AND booking_date != ''
+        """,
+        db,
+    )
+    db.close()
+
+    if df.empty:
+        return {"empty": True}
+
+    df["booking_date"] = pd.to_datetime(df["booking_date"], errors="coerce")
+    df["transaction_date"] = pd.to_datetime(df["transaction_date"], errors="coerce")
+    df = df.dropna(subset=["booking_date"])
+    df = df[(df["booking_date"].dt.date >= start_date) & (df["booking_date"].dt.date <= end_date)]
+    if df.empty:
+        return {"empty": True}
+
+    df = df[df["action"].isin(["BOOKED", "RESCHEDULED"])]
+    if df.empty:
+        return {"empty": True}
+
+    df = df.sort_values("transaction_date")
+    df_latest = df.drop_duplicates(subset=["confirmation_code"], keep="last")
+
+    total_bookings = len(df_latest)
+    total_guests = int(df_latest["party_size"].fillna(0).sum())
+    gross_sales = float(df_latest["total_price"].fillna(0).sum())
+    collected = float(df_latest["payment_collected"].fillna(0).sum())
+    comps = float(df_latest["comp"].fillna(0).sum())
+    discounts = float(df_latest["discount"].fillna(0).sum())
+    avg_party = total_guests / total_bookings if total_bookings else 0
+    avg_rev_per_guest = gross_sales / total_guests if total_guests else 0
+
+    kpis = [
+        ("Bookings", f"{total_bookings:,}"),
+        ("Guests", f"{total_guests:,}"),
+        ("Gross Sales", f"${gross_sales:,.2f}"),
+        ("Collected", f"${collected:,.2f}"),
+        ("Comps", f"${comps:,.2f}"),
+        ("Discounts", f"${discounts:,.2f}"),
+        ("Avg Party Size", f"{avg_party:,.1f}"),
+        ("Avg Revenue / Guest", f"${avg_rev_per_guest:,.2f}"),
+    ]
+
+    monthly = (
+        df_latest.groupby(pd.Grouper(key="booking_date", freq="M"))
+        .agg(
+            bookings=("confirmation_code", "count"),
+            guests=("party_size", "sum"),
+            sales=("total_price", "sum"),
+            collected=("payment_collected", "sum"),
+        )
+        .reset_index()
+    )
+    monthly["label"] = monthly["booking_date"].dt.strftime("%b %Y")
+
+    exp_counts = (
+        df_latest.groupby("experience")
+        .agg(bookings=("confirmation_code", "count"), sales=("total_price", "sum"))
+        .reset_index()
+        .sort_values("bookings", ascending=False)
+        .head(10)
+    )
+
+    charts = {
+        "monthly": {
+            "labels": monthly["label"].tolist(),
+            "bookings": monthly["bookings"].fillna(0).astype(int).tolist(),
+            "guests": monthly["guests"].fillna(0).astype(int).tolist(),
+            "sales": monthly["sales"].fillna(0).astype(float).tolist(),
+            "collected": monthly["collected"].fillna(0).astype(float).tolist(),
+        },
+        "experiences": {
+            "labels": exp_counts["experience"].fillna("Unknown").tolist(),
+            "bookings": exp_counts["bookings"].fillna(0).astype(int).tolist(),
+            "sales": exp_counts["sales"].fillna(0).astype(float).tolist(),
+        },
+    }
+
+    rows = df_latest.sort_values("booking_date", ascending=False).head(200)
+    table = []
+    for _, row in rows.iterrows():
+        table.append(
+            {
+                "booking_date": row.get("booking_date").strftime("%Y-%m-%d") if not pd.isna(row.get("booking_date")) else "",
+                "experience": row.get("experience") or "",
+                "party_size": int(row.get("party_size") or 0),
+                "total_price": float(row.get("total_price") or 0),
+                "payment_collected": float(row.get("payment_collected") or 0),
+                "confirmation_code": row.get("confirmation_code") or "",
+            }
+        )
+
+    return {
+        "empty": False,
+        "kpis": kpis,
+        "charts": charts,
+        "table": table,
+    }
+
+
 def _build_inventory_view(
     *,
     unit: str,
@@ -290,7 +427,7 @@ def _build_inventory_view(
 
 @app.context_processor
 def inject_export_urls():
-    exportable = {"dashboard", "orders", "inventory", "products_report"}
+    exportable = {"dashboard", "orders", "inventory", "products_report", "tours"}
     endpoint = request.endpoint
     if endpoint not in exportable:
         return {"export_excel_url": None, "export_pdf_url": None}
@@ -363,6 +500,7 @@ def dashboard():
         start_date, end_date = end_date, start_date
 
     report = build_report(DB_PATH, start_date, end_date)
+    tours_report = _tours_report(start_date, end_date)
     unit_label = "Cases" if unit == "case" else "Bottles"
     unit_factor = 12 if unit == "case" else 1
     if not report.get("empty"):
@@ -400,6 +538,7 @@ def dashboard():
     return render_template(
         "dashboard.html",
         report=report,
+        tours_report=tours_report,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
@@ -408,11 +547,17 @@ def dashboard():
     )
 
 
+@app.route("/settings", methods=["GET"])
+@login_required
+def settings():
+    cache_status = _build_cache_status()
+    return render_template("settings.html", cache_status=cache_status)
+
+
 @app.route("/cache", methods=["GET"])
 @login_required
 def cache_view():
-    cache_status = _build_cache_status()
-    return render_template("cache.html", cache_status=cache_status)
+    return redirect(url_for("settings"))
 
 
 @app.route("/products-report", methods=["GET"])
@@ -502,6 +647,82 @@ def inventory():
         show_library=not (only_barn or only_warehouse),
         unit=unit,
     )
+
+
+@app.route("/tours", methods=["GET"])
+@login_required
+def tours():
+    range_key = request.args.get("range", "last_12_months")
+    start_default, end_default = _default_dates()
+    start_date = _parse_date(request.args.get("start")) or start_default
+    end_date = _parse_date(request.args.get("end")) or end_default
+    start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    report = _tours_report(start_date, end_date)
+    return render_template(
+        "tours.html",
+        report=report,
+        range_key=range_key,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+    )
+
+
+@app.route("/tours/upload", methods=["POST"])
+@login_required
+def tours_upload():
+    file = request.files.get("tock_csv")
+    if not file or not file.filename:
+        flash("Please select a Tock CSV file to upload.", "error")
+        return redirect(url_for("tours"))
+
+    replace_existing = request.form.get("replace_existing") == "1"
+    if replace_existing:
+        clear_tock_transactions(DB_PATH)
+
+    rows = []
+    wrapper = TextIOWrapper(file.stream, encoding="utf-8-sig")
+    reader = csv.DictReader(wrapper)
+    for row in reader:
+        rows.append(
+            {
+                "transaction_id": row.get("Transaction ID"),
+                "first_transaction_id": row.get("First Transaction ID"),
+                "confirmation_code": row.get("Confirmation Code"),
+                "action": row.get("Action"),
+                "transaction_date": row.get("Transaction Date"),
+                "booking_date": row.get("Booking Date"),
+                "realized_date": row.get("Realized Date"),
+                "experience": row.get("Experience"),
+                "party_size": _parse_int(row.get("Party Size")),
+                "price_per_person": _parse_float(row.get("Price Per Person")),
+                "sub_total": _parse_float(row.get("Sub total")),
+                "tax": _parse_float(row.get("Tax")),
+                "service_charge": _parse_float(row.get("Service Charge")),
+                "gratuity_charge": _parse_float(row.get("Gratuity Charge")),
+                "fees": _parse_float(row.get("Fees")),
+                "charges": _parse_float(row.get("Charges")),
+                "comp": _parse_float(row.get("Comp")),
+                "discount": _parse_float(row.get("Discount")),
+                "total_price": _parse_float(row.get("Total Price")),
+                "gift_card_value": _parse_float(row.get("Gift Card Value")),
+                "payment_collected": _parse_float(row.get("Payment Collected")),
+                "payment_refunded": _parse_float(row.get("Payment Refunded")),
+                "net_payout_amount": _parse_float(row.get("Net Payout Amount")),
+                "booking_method": row.get("Booking Method"),
+                "payment_type": row.get("Payment Type"),
+                "email": row.get("Email"),
+                "first_name": row.get("First Name"),
+                "last_name": row.get("Last Name"),
+                "raw_json": json.dumps(row, default=str),
+            }
+        )
+
+    inserted = upsert_tock_transactions(DB_PATH, rows)
+    flash(f"Imported {inserted} Tock transactions.", "info")
+    return redirect(url_for("tours"))
 
 
 @app.route("/orders", methods=["GET"])
@@ -857,6 +1078,26 @@ def export_current_excel(export_endpoint: str):
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
+    if export_endpoint == "tours":
+        range_key = request.args.get("range", "last_12_months")
+        start_default, end_default = _default_dates()
+        start_date = _parse_date(request.args.get("start")) or start_default
+        end_date = _parse_date(request.args.get("end")) or end_default
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+        report = _tours_report(start_date, end_date)
+        if report.get("empty"):
+            return ("No tour data for this range.", 400)
+        buffer = export_tours_excel(report, start_date, end_date)
+        filename = f"grimms_bluff_tours_{start_date.isoformat()}_{end_date.isoformat()}.xlsx"
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
     return ("Unsupported export", 400)
 
 
@@ -1013,6 +1254,21 @@ def export_current_pdf(export_endpoint: str):
         subtitle = " • ".join(subtitle_parts)
         buffer = export_orders_pdf(export_rows, subtitle=subtitle)
         filename = f"grimms_bluff_orders_page_{page}.pdf"
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
+
+    if export_endpoint == "tours":
+        range_key = request.args.get("range", "last_12_months")
+        start_default, end_default = _default_dates()
+        start_date = _parse_date(request.args.get("start")) or start_default
+        end_date = _parse_date(request.args.get("end")) or end_default
+        start_date, end_date = _apply_range_key(range_key, start_date, end_date)
+        if start_date and end_date and start_date > end_date:
+            start_date, end_date = end_date, start_date
+        report = _tours_report(start_date, end_date)
+        if report.get("empty"):
+            return ("No tour data for this range.", 400)
+        buffer = export_tours_pdf(report, start_date, end_date)
+        filename = f"grimms_bluff_tours_{start_date.isoformat()}_{end_date.isoformat()}.pdf"
         return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
 
     return ("Unsupported export", 400)
