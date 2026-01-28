@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block controls %}
-  <form class="filter-form" method="get" action="{{ url_for('tours') }}" data-autosubmit>
+  <form class="filter-form" method="get" action="{{ url_for('tours') }}">
     <input type="hidden" name="range" value="{{ range_key }}" />
     <input type="hidden" name="start" value="{{ start_date }}" />
     <input type="hidden" name="end" value="{{ end_date }}" />
@@ -132,6 +132,7 @@
       if (dropdown) {
         const trigger = dropdown.querySelector("[data-dropdown-trigger]");
         const menu = dropdown.querySelector("[data-dropdown-menu]");
+        const form = dropdown.closest("form");
         const hidden = document.getElementById("experience-filter");
         const checkboxes = Array.from(menu.querySelectorAll("input[type='checkbox']")).filter((el) => !el.hasAttribute("data-select-all"));
         const selectAll = menu.querySelector("[data-select-all]");
@@ -165,6 +166,9 @@
         document.addEventListener("click", (event) => {
           if (!dropdown.contains(event.target)) {
             menu.classList.remove("open");
+            if (form) {
+              form.requestSubmit();
+            }
           }
         });
 

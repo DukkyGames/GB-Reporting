@@ -9,7 +9,7 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, TableStyle, Image, LongTable, Table, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, TableStyle, Image, LongTable, Table, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import ImageReader
 
@@ -46,6 +46,20 @@ def _make_styles():
             fontSize=12,
             leading=14,
             textColor=BRAND_DARK,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            "CenterTitle",
+            parent=styles["Title"],
+            alignment=1,
+        )
+    )
+    styles.add(
+        ParagraphStyle(
+            "CenterSubtitle",
+            parent=styles["Subtitle"],
+            alignment=1,
         )
     )
     return styles
@@ -196,6 +210,36 @@ def _build_table(data: list[list[str]], col_widths: list[float] | None = None) -
     return table
 
 
+def _heat_color(value: float, min_value: float, max_value: float) -> colors.Color:
+    if max_value <= min_value:
+        return colors.HexColor("#e7f5f7")
+    t = (value - min_value) / (max_value - min_value)
+    # Green -> Yellow -> Red
+    if t < 0.5:
+        t2 = t / 0.5
+        r = int(76 + (249 - 76) * t2)
+        g = int(214 + (231 - 214) * t2)
+        b = int(96 + (147 - 96) * t2)
+    else:
+        t2 = (t - 0.5) / 0.5
+        r = int(249 + (239 - 249) * t2)
+        g = int(231 + (83 - 231) * t2)
+        b = int(147 + (80 - 147) * t2)
+    return colors.Color(r / 255, g / 255, b / 255)
+
+
+def _apply_heatmap(table: Table, values: list[float], col_idx: int, start_row: int = 1) -> None:
+    if not values:
+        return
+    min_v = min(values)
+    max_v = max(values)
+    styles = []
+    for i, value in enumerate(values):
+        color = _heat_color(value, min_v, max_v)
+        styles.append(("BACKGROUND", (col_idx, start_row + i), (col_idx, start_row + i), color))
+    table.setStyle(TableStyle(styles))
+
+
 def export_orders_excel(rows: list[dict]) -> BytesIO:
     output = BytesIO()
     df = pd.DataFrame(rows)
@@ -310,35 +354,143 @@ def export_products_pdf(report: dict, start_date: date, end_date: date) -> Bytes
     subtitle = f"{start_date.isoformat()} to {end_date.isoformat()} • {unit_label}"
     story = _header_story("Products Report", subtitle, styles)
 
-    top_skus = report.get("top_skus", [])
-    if top_skus:
-        headers = ["SKU", unit_label, "Avg Bottle"]
-        table_rows = [headers]
-        for row in top_skus:
-            table_rows.append(
-                [
-                    str(row.get("sku", "")),
-                    f"{row.get('display_qty', row.get('cases_sold', 0)):.2f}",
-                    f"${row.get('avg_sale', 0):.2f}",
-                ]
-            )
-        story.append(Paragraph("Top Selling SKUs", styles["Section"]))
-        story.append(_build_table(table_rows, col_widths=[1.2 * inch, 1.0 * inch, 1.0 * inch]))
+    sku_rows = report.get("skus", [])
+    if sku_rows:
+        story.append(PageBreak())
+        story.append(Paragraph("Sales Report by SKU", styles["CenterTitle"]))
+        story.append(Paragraph(f"{start_date.isoformat()} - {end_date.isoformat()}", styles["CenterSubtitle"]))
         story.append(Spacer(1, 0.2 * inch))
 
-    inventory = report.get("inventory", [])
-    if inventory:
-        headers = ["SKU", unit_label]
-        table_rows = [headers]
-        for row in inventory:
+        left_flow = []
+        for sku in sku_rows:
+            left_flow.append(Paragraph(f"SKU: {sku.get('sku', '')}", styles["Section"]))
+            headers = ["Order Type", "Product SKU", "Product Name", unit_label, "Net Sales", "Avg Sale"]
+            table_rows = [headers]
+            row_styles = []
+            for idx, row in enumerate(sku.get("rows", []), start=1):
+                table_rows.append(
+                    [
+                        str(row.get("order_type", "")),
+                        str(row.get("sku", "")),
+                        str(row.get("name", "")),
+                        f"{row.get('cases_sold', 0):.2f}",
+                        f"${row.get('net_sales', 0):.2f}",
+                        f"${row.get('avg_sale', 0):.2f}",
+                    ]
+                )
+                if row.get("is_top_avg"):
+                    row_styles.append(("BACKGROUND", (0, idx), (-1, idx), colors.HexColor("#7CFC72")))
             table_rows.append(
                 [
-                    str(row.get("sku", "")),
-                    f"{row.get('total_inventory', 0):.2f}",
+                    "TOTAL",
+                    "",
+                    "",
+                    f"{sku.get('total_cases', 0):.2f}",
+                    f"${sku.get('total_sales', 0):.2f}",
+                    f"${sku.get('avg_sale', 0):.2f}",
                 ]
             )
-        story.append(Paragraph("Inventory Available", styles["Section"]))
-        story.append(_build_table(table_rows, col_widths=[1.6 * inch, 1.2 * inch]))
+            table = _build_table(
+                table_rows,
+                col_widths=[1.0 * inch, 0.9 * inch, 2.0 * inch, 0.7 * inch, 0.8 * inch, 0.7 * inch],
+            )
+            if row_styles:
+                table.setStyle(TableStyle(row_styles))
+            left_flow.append(table)
+            left_flow.append(Spacer(1, 0.2 * inch))
+
+        right_flow = []
+        top_skus = report.get("top_skus", [])
+        if top_skus:
+            right_flow.append(Paragraph("Top Selling SKUs", styles["Section"]))
+            headers = ["SKU", unit_label, "Avg Sale"]
+            table_rows = [headers]
+            case_vals = []
+            avg_vals = []
+            for row in top_skus:
+                case_val = float(row.get("display_qty", row.get("cases_sold", 0)) or 0)
+                avg_val = float(row.get("avg_sale", 0) or 0)
+                case_vals.append(case_val)
+                avg_vals.append(avg_val)
+                table_rows.append([str(row.get("sku", "")), f"{case_val:.2f}", f"{avg_val:.2f}"])
+            table = _build_table(table_rows, col_widths=[1.0 * inch, 1.0 * inch, 1.0 * inch])
+            _apply_heatmap(table, case_vals, 1)
+            _apply_heatmap(table, avg_vals, 2)
+            right_flow.append(table)
+            right_flow.append(Spacer(1, 0.2 * inch))
+
+        inventory_labels = report.get("inventory_labels", [])
+        if inventory_labels:
+            right_flow.append(Paragraph("Inventory Available by Label", styles["Section"]))
+            headers = ["Core SKU", "Total Inventory (Cases)"]
+            table_rows = [headers]
+            inv_vals = []
+            for row in inventory_labels:
+                val = float(row.get("total_inventory", 0) or 0)
+                inv_vals.append(val)
+                table_rows.append([str(row.get("base_sku", "")), f"{val:.2f}"])
+            table = _build_table(table_rows, col_widths=[1.2 * inch, 1.2 * inch])
+            _apply_heatmap(table, inv_vals, 1)
+            right_flow.append(table)
+            right_flow.append(Spacer(1, 0.2 * inch))
+
+        inventory = report.get("inventory", [])
+        if inventory:
+            right_flow.append(Paragraph("Inventory Available", styles["Section"]))
+            headers = ["Product SKU", "Total Inventory (Cases)"]
+            table_rows = [headers]
+            inv_vals = []
+            for row in inventory:
+                val = float(row.get("total_inventory", 0) or 0)
+                inv_vals.append(val)
+                table_rows.append([str(row.get("sku", "")), f"{val:.2f}"])
+            table = _build_table(table_rows, col_widths=[1.2 * inch, 1.2 * inch])
+            _apply_heatmap(table, inv_vals, 1)
+            right_flow.append(table)
+
+        story.append(PageBreak())
+        story.append(Paragraph("Sales Report by SKU", styles["CenterTitle"]))
+        story.append(Paragraph(f"{start_date.isoformat()} - {end_date.isoformat()}", styles["CenterSubtitle"]))
+        story.append(Spacer(1, 0.2 * inch))
+
+        sidebar_table = None
+        if right_flow:
+            sidebar_table = LongTable(
+                [[block] for block in right_flow],
+                colWidths=[2.1 * inch],
+            )
+            sidebar_table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+
+        row_index = 0
+        while row_index < len(left_flow):
+            chunk = left_flow[row_index : row_index + 12]
+            row_index += 12
+            rows = [[block, sidebar_table if row_index <= 12 and sidebar_table else ""] for block in chunk]
+            layout = LongTable(rows, colWidths=[4.3 * inch, 2.1 * inch])
+            layout.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ]
+                )
+            )
+            story.append(layout)
+            if row_index < len(left_flow):
+                story.append(PageBreak())
 
     doc.build(story)
     buffer.seek(0)
