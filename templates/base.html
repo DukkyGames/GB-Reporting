@@ -159,6 +159,7 @@
     function initAutoSubmitForms() {
       document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
         const storageKey = `filters:${window.location.pathname}`;
+        const scrollKey = `scroll:${window.location.pathname}`;
         let timer = null;
         const rangeSelect = form.querySelector("select[name='range']");
         const startInput = form.querySelector("input[name='start']");
@@ -209,6 +210,7 @@
             clearTimeout(timer);
           }
           saveCurrent();
+          window.sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
           form.requestSubmit();
         };
 
@@ -221,6 +223,7 @@
             }
             timer = setTimeout(() => {
               saveCurrent();
+              window.sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
               form.requestSubmit();
             }, 400);
           });
@@ -240,6 +243,12 @@
     document.addEventListener("DOMContentLoaded", () => {
       initSortableTables();
       initAutoSubmitForms();
+      const scrollKey = `scroll:${window.location.pathname}`;
+      const savedScroll = window.sessionStorage.getItem(scrollKey);
+      if (savedScroll) {
+        window.scrollTo(0, parseInt(savedScroll, 10) || 0);
+        window.sessionStorage.removeItem(scrollKey);
+      }
     });
   </script>
 

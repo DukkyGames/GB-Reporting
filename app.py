@@ -312,6 +312,8 @@ def _tours_report(start_date: date, end_date: date, experience_filter: list[str]
             orders_df["order_total"] = pd.to_numeric(orders_df["order_total"], errors="coerce").fillna(0)
             total_wine_sales = float(orders_df["order_total"].sum())
             avg_purchase_per_tour = total_wine_sales / total_bookings if total_bookings else 0
+            if total_guests:
+                avg_rev_per_guest = (gross_sales + total_wine_sales) / total_guests
 
     kpis = [
         ("Bookings", f"{total_bookings:,}"),
@@ -665,6 +667,17 @@ def dashboard():
             units = report["charts"]["monthly"].get("units", [])
             if unit == "case":
                 report["charts"]["monthly"]["units"] = [u / unit_factor for u in units]
+        if unit == "case" and report.get("table"):
+            updated_table = []
+            for row in report["table"]:
+                units_raw = row.get("units", "")
+                try:
+                    units_value = float(str(units_raw).replace(",", ""))
+                    units_display = f"{units_value / unit_factor:,.1f}"
+                except ValueError:
+                    units_display = units_raw
+                updated_table.append({**row, "units": units_display})
+            report["table"] = updated_table
     return render_template(
         "dashboard.html",
         report=report,
@@ -784,6 +797,7 @@ def inventory():
 @login_required
 def tours():
     range_key = request.args.get("range", "last_12_months")
+    unit = request.args.get("unit", "case")
     start_default, end_default = _default_dates()
     start_date = _parse_date(request.args.get("start")) or start_default
     end_date = _parse_date(request.args.get("end")) or end_default
@@ -800,6 +814,7 @@ def tours():
         report=report,
         experience_options=experience_options,
         selected_experiences=selected,
+        unit=unit,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
@@ -865,6 +880,7 @@ def tours_upload():
 @login_required
 def orders():
     query = request.args.get("q", "").strip()
+    unit = request.args.get("unit", "case")
     range_key = request.args.get("range", "custom")
     start_date = _parse_date(request.args.get("start"))
     end_date = _parse_date(request.args.get("end"))
@@ -971,6 +987,7 @@ def orders():
         orders=orders_rows,
         order_types=order_types,
         query=query,
+        unit=unit,
         range_key=range_key,
         page=page,
         total_pages=total_pages,
@@ -992,6 +1009,16 @@ def orders():
 @app.route("/orders/<order_id>", methods=["GET"])
 @login_required
 def order_detail(order_id: str):
+    unit = request.args.get("unit", "case")
+    unit_label = "Cases" if unit == "case" else "Bottles"
+    unit_factor = 12 if unit == "case" else 1
+
+    def _format_units(value: float | int | None) -> str:
+        raw = float(value or 0)
+        if unit == "case":
+            return f"{raw / unit_factor:,.1f}"
+        return f"{raw:,.0f}"
+
     db = get_db(DB_PATH)
     order = db.execute("SELECT * FROM orders WHERE order_id = ?", (order_id,)).fetchone()
     items = db.execute(
@@ -1009,11 +1036,18 @@ def order_detail(order_id: str):
             raw_pretty = json.dumps(json.loads(raw), indent=2)
         except (json.JSONDecodeError, TypeError):
             raw_pretty = raw
+    items_rows = []
+    for item in items:
+        item_dict = dict(item)
+        item_dict["quantity_display"] = _format_units(item_dict.get("quantity"))
+        items_rows.append(item_dict)
     return render_template(
         "order_detail.html",
         order=order,
-        items=items,
+        items=items_rows,
         raw_pretty=raw_pretty,
+        unit_label=unit_label,
+        order_units_display=_format_units(order["units"] if order else 0),
     )
 
 
@@ -1021,6 +1055,7 @@ def order_detail(order_id: str):
 @login_required
 def orders_by_email():
     email = (request.args.get("email") or "").strip().lower()
+    unit = request.args.get("unit", "case")
     if not email:
         flash("Missing customer email.", "error")
         return redirect(url_for("orders"))
@@ -1054,6 +1089,7 @@ def orders_by_email():
         orders=orders_rows,
         order_types=[],
         query="",
+        unit=unit,
         range_key="custom",
         page=1,
         total_pages=1,

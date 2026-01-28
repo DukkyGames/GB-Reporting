@@ -144,7 +144,7 @@
     <section class="panel table-panel">
       <div class="panel-head">
         <h3>Monthly Summary</h3>
-        <p>Net sales, orders, and units by month</p>
+        <p>Net sales, orders, and {{ unit_label|lower }} by month</p>
       </div>
       <div class="table-wrap">
         <table>
@@ -153,7 +153,7 @@
               <th>Month</th>
               <th>Net Sales</th>
               <th>Orders</th>
-              <th>Units</th>
+              <th>{{ unit_label }}</th>
             </tr>
           </thead>
           <tbody>

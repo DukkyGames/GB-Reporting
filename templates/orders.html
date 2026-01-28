@@ -73,7 +73,7 @@
         <tbody>
           {% for order in orders %}
             <tr>
-              <td><a href="{{ url_for('order_detail', order_id=order['order_id']) }}">{{ order['order_number'] }}</a></td>
+              <td><a href="{{ url_for('order_detail', order_id=order['order_id'], unit=unit) }}">{{ order['order_number'] }}</a></td>
               <td>{{ order['completed_date'] }}</td>
               <td>{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}</td>
               <td>{{ order['order_type'] }}</td>

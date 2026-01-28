@@ -23,14 +23,6 @@
       <input type="number" name="min_library" min="0" step="1" value="{{ min_library }}" />
     </label>
     <label class="inline-check">
-      <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
-      Bottles
-    </label>
-    <label class="inline-check">
-      <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
-      Cases
-    </label>
-    <label class="inline-check">
       <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} />
       Hide Zero
     </label>

@@ -49,7 +49,7 @@
         <div class="detail-row"><span>Tip</span><span>${{ "%.2f"|format(order['tip'] or 0) }}</span></div>
         <div class="detail-row"><span>Total</span><span>${{ "%.2f"|format(order['total'] or 0) }}</span></div>
         <div class="detail-row"><span>Net Sales</span><span>${{ "%.2f"|format(order['net_sales'] or 0) }}</span></div>
-        <div class="detail-row"><span>Units</span><span>{{ order['units'] }}</span></div>
+        <div class="detail-row"><span>{{ unit_label }}</span><span>{{ order_units_display }}</span></div>
         <div class="detail-row"><span>Payment Status</span><span>{{ order['payment_status'] }}</span></div>
         <div class="detail-row"><span>Payment Terms</span><span>{{ order['payment_terms'] }}</span></div>
       </div>
@@ -67,7 +67,7 @@
             <th>SKU</th>
             <th>Title</th>
             <th>Type</th>
-            <th>Qty</th>
+            <th>Qty ({{ unit_label }})</th>
             <th>Price</th>
             <th>Original</th>
             <th>Sales Tax</th>
@@ -81,7 +81,7 @@
               <td>{{ item['sku'] }}</td>
               <td>{{ item['title'] or item['product_name'] }}</td>
               <td>{{ item['item_type'] }}</td>
-              <td>{{ item['quantity'] }}</td>
+              <td>{{ item['quantity_display'] }}</td>
               <td>${{ "%.2f"|format(item['price'] or 0) }}</td>
               <td>${{ "%.2f"|format(item['original_price'] or 0) }}</td>
               <td>${{ "%.2f"|format(item['sales_tax'] or 0) }}</td>

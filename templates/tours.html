@@ -46,6 +46,9 @@
             <div class="kpi-meta">
               <div class="kpi-value">{{ value }}</div>
               <div class="kpi-label">{{ label }}</div>
+              {% if label == "Avg Revenue / Guest" %}
+                <div class="kpi-subtitle">Tours + matched orders</div>
+              {% endif %}
             </div>
           </div>
         {% endfor %}
@@ -113,7 +116,7 @@
                 <td>${{ "%.2f"|format(row.payment_collected) }}</td>
                 <td>
                   {% if row.has_orders %}
-                    <a class="ghost-btn" href="{{ url_for('orders_by_email', email=row.email) }}">Show Orders</a>
+                    <a class="ghost-btn" href="{{ url_for('orders_by_email', email=row.email, unit=unit) }}">Show Orders</a>
                   {% else %}
                     <span class="ghost-btn is-disabled">Show Orders</span>
                   {% endif %}
