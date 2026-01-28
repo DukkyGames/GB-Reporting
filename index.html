@@ -1,0 +1,121 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grimm's Bluff Sales Report</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <img src="Logo.png" alt="Grimm's Bluff logo" />
+      </div>
+      <div>
+        <h1>Grimm's Bluff Dashboard</h1>
+        <p>Upload your CSV to generate a full report</p>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="file-btn">
+        <input id="fileInput" type="file" accept=".csv" />
+        Upload CSV
+      </label>
+      <button id="loadSample" class="ghost-btn">Load Sample</button>
+      <span id="fileMeta" class="file-meta">No file loaded</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="panel kpi-panel">
+      <div class="panel-head">
+        <h2>Financial Snapshot</h2>
+        <p>Core KPIs generated from your data</p>
+      </div>
+      <div id="kpiGrid" class="kpi-grid"></div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Monthly Net Sales</h3>
+          <p>Trend of net sales across the year</p>
+        </div>
+        <div id="chartMonthlyNet" class="chart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Orders & Units</h3>
+          <p>Orders (bars) and units (line) each month</p>
+        </div>
+        <div id="chartOrdersUnits" class="chart"></div>
+      </div>
+    </section>
+
+    <section class="grid three-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Products by Revenue</h3>
+        </div>
+        <div id="chartTopRevenue" class="chart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Products by Units</h3>
+        </div>
+        <div id="chartTopUnits" class="chart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Customer Mix</h3>
+          <p>Unique vs repeat customers</p>
+        </div>
+        <div id="chartCustomerMix" class="chart"></div>
+      </div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Sales by Channel</h3>
+        </div>
+        <div id="chartChannel" class="chart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top States (Shipped Orders)</h3>
+        </div>
+        <div id="chartStates" class="chart"></div>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h3>Monthly Summary</h3>
+        <p>Net sales, orders, and units by month</p>
+      </div>
+      <div class="table-wrap">
+        <table id="monthlyTable">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Net Sales</th>
+              <th>Orders</th>
+              <th>Units</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Grimm's Bluff Report Generator</span>
+    <span id="footerNote">Upload a CSV to begin</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
