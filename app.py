@@ -36,7 +36,7 @@ from cache import (
     set_cache_status,
     get_cache_status,
 )
-from reports import build_report, build_products_report
+from reports import build_report, build_products_report, build_report_timeseries
 import pandas as pd
 from exporters import (
     export_excel,
@@ -272,8 +272,10 @@ def _tours_report(start_date: date, end_date: date) -> dict:
         ("Avg Revenue / Guest", f"${avg_rev_per_guest:,.2f}"),
     ]
 
+    use_daily = start_date.year == end_date.year and start_date.month == end_date.month
+    freq = "D" if use_daily else "M"
     monthly = (
-        df_latest.groupby(pd.Grouper(key="booking_date", freq="M"))
+        df_latest.groupby(pd.Grouper(key="booking_date", freq=freq))
         .agg(
             bookings=("confirmation_code", "count"),
             guests=("party_size", "sum"),
@@ -282,7 +284,8 @@ def _tours_report(start_date: date, end_date: date) -> dict:
         )
         .reset_index()
     )
-    monthly["label"] = monthly["booking_date"].dt.strftime("%b %Y")
+    label_fmt = "%b %d" if use_daily else "%b %Y"
+    monthly["label"] = monthly["booking_date"].dt.strftime(label_fmt)
 
     exp_counts = (
         df_latest.groupby("experience")
@@ -500,6 +503,11 @@ def dashboard():
         start_date, end_date = end_date, start_date
 
     report = build_report(DB_PATH, start_date, end_date)
+    is_single_month = start_date.year == end_date.year and start_date.month == end_date.month
+    if not report.get("empty"):
+        granularity = "day" if is_single_month else "month"
+        timeseries = build_report_timeseries(DB_PATH, start_date, end_date, granularity=granularity)
+        report["charts"]["monthly"] = timeseries
     tours_report = _tours_report(start_date, end_date)
     unit_label = "Cases" if unit == "case" else "Bottles"
     unit_factor = 12 if unit == "case" else 1
@@ -539,6 +547,7 @@ def dashboard():
         "dashboard.html",
         report=report,
         tours_report=tours_report,
+        is_single_month=is_single_month,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),

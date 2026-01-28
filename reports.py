@@ -208,6 +208,42 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     }
 
 
+def build_report_timeseries(db_path: str, start_date: date, end_date: date, granularity: str = "month") -> dict:
+    orders, _ = _load_data(db_path, start_date, end_date)
+    if orders.empty:
+        return {"labels": [], "net_sales": [], "orders": [], "units": []}
+
+    orders["completed_date"] = pd.to_datetime(orders["completed_date"], errors="coerce")
+    orders["completed_local"] = orders["completed_date"].dt.date
+    for col in ("units", "sub_total"):
+        orders[col] = pd.to_numeric(orders[col], errors="coerce").fillna(0)
+
+    if granularity == "day":
+        grouped = orders.groupby("completed_local").agg(
+            net_sales=("sub_total", "sum"),
+            orders=("order_id", "count"),
+            units=("units", "sum"),
+        ).reset_index()
+        grouped = grouped.sort_values("completed_local")
+        labels = [d.strftime("%b %d") for d in pd.to_datetime(grouped["completed_local"]).dt.date]
+    else:
+        orders["month"] = orders["completed_date"].dt.to_period("M").dt.to_timestamp()
+        grouped = orders.groupby("month").agg(
+            net_sales=("sub_total", "sum"),
+            orders=("order_id", "count"),
+            units=("units", "sum"),
+        ).reset_index()
+        grouped = grouped.sort_values("month")
+        labels = [d.strftime("%b %Y") for d in grouped["month"]]
+
+    return {
+        "labels": labels,
+        "net_sales": grouped["net_sales"].astype(float).tolist(),
+        "orders": grouped["orders"].astype(int).tolist(),
+        "units": grouped["units"].astype(float).tolist(),
+    }
+
+
 def build_report_pdf(db_path: str, start_date: date, end_date: date) -> dict:
     core = _build_report_core(db_path, start_date, end_date)
     if core["empty"]:

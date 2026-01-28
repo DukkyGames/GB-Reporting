@@ -11,8 +11,9 @@ find . -type d -name "__pycache__" -prune -exec rm -rf {} +
 
 git pull
 
-# Ensure venv exists
-if [ ! -d ".venv" ]; then
+# Ensure venv exists and is usable
+if [ ! -x ".venv/bin/python" ]; then
+  rm -rf .venv
   python3 -m venv .venv
 fi
 

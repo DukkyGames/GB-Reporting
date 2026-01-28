@@ -71,14 +71,14 @@
         <div class="panel">
           <div class="panel-head">
             <h3>Tour Bookings & Guests</h3>
-            <p>Monthly bookings (bars) and guests (line)</p>
+            <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} bookings (bars) and guests (line)</p>
           </div>
           <div class="chart-plot" id="tours-dashboard-bookings"></div>
         </div>
         <div class="panel">
           <div class="panel-head">
             <h3>Tour Collected</h3>
-            <p>Monthly collected revenue</p>
+            <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} collected revenue</p>
           </div>
           <div class="chart-plot" id="tours-dashboard-collected"></div>
         </div>
@@ -88,15 +88,15 @@
     <section class="grid two-col">
       <div class="panel">
         <div class="panel-head">
-          <h3>Monthly Net Sales</h3>
-          <p>Trend of net sales across the year</p>
+          <h3>{% if is_single_month %}Daily{% else %}Monthly{% endif %} Net Sales</h3>
+          <p>Trend of net sales{% if not is_single_month %} across the year{% endif %}</p>
         </div>
         <div class="chart-plot" id="chart-monthly-net-sales"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
           <h3>Orders & {{ unit_label }}</h3>
-          <p>Orders (bars) and {{ unit_label|lower }} (line) each month</p>
+          <p>Orders (bars) and {{ unit_label|lower }} (line) each {% if is_single_month %}day{% else %}month{% endif %}</p>
         </div>
         <div class="chart-plot" id="chart-orders-units"></div>
       </div>
