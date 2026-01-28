@@ -26,6 +26,8 @@ from cache import (
     refresh_orders_cache,
     refresh_products_cache,
     refresh_inventory_cache,
+    clear_orders_cache,
+    clear_products_cache,
     rate_limit_check,
     set_cache_status,
     get_cache_status,
@@ -1035,6 +1037,7 @@ def refresh_orders():
             refresh_error="",
         )
         try:
+            clear_orders_cache(DB_PATH)
             refresh_orders_cache(DB_PATH, start_date, end_date)
             db = get_db(DB_PATH)
             orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
@@ -1077,6 +1080,7 @@ def refresh_products():
             refresh_error="",
         )
         try:
+            clear_products_cache(DB_PATH)
             refresh_products_cache(DB_PATH)
             db = get_db(DB_PATH)
             products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
@@ -1133,6 +1137,54 @@ def refresh_inventory():
 
     Thread(target=_run, daemon=True).start()
     flash("Inventory refresh started.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/refresh/latest", methods=["POST"])
+@login_required
+def refresh_latest():
+    def _run():
+        if get_cache_status(DB_PATH).get("refresh_in_progress") == "1":
+            return
+        set_cache_status(
+            DB_PATH,
+            refresh_in_progress="1",
+            refresh_started_at=datetime.now(timezone.utc).isoformat(),
+            refresh_error="",
+        )
+        try:
+            latest_days = int(os.environ.get("LATEST_DAYS", "7"))
+            latest_days = max(latest_days, 1)
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=latest_days - 1)
+            refresh_orders_cache(DB_PATH, start_date, end_date)
+            db = get_db(DB_PATH)
+            orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+            items_count = db.execute("SELECT COUNT(*) FROM order_items").fetchone()[0]
+            products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
+            latest_order = db.execute("SELECT MAX(date(completed_date)) FROM orders").fetchone()[0]
+            db.close()
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                orders_count=str(orders_count),
+                items_count=str(items_count),
+                products_count=str(products_count),
+                inventory_count=str(inventory_count),
+                latest_order_date=latest_order or "",
+            )
+        except Exception as exc:
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                refresh_error=f"{exc}\n{traceback.format_exc()}",
+            )
+
+    Thread(target=_run, daemon=True).start()
+    flash("Latest data refresh started.", "info")
     return redirect(url_for("dashboard"))
 
 
@@ -1197,8 +1249,51 @@ def _schedule_cache_refresh():
                 refresh_error=f"{exc}\n{traceback.format_exc()}",
             )
 
+    def _run_latest():
+        if get_cache_status(DB_PATH).get("refresh_in_progress") == "1":
+            return
+        set_cache_status(
+            DB_PATH,
+            refresh_in_progress="1",
+            refresh_started_at=datetime.now(timezone.utc).isoformat(),
+            refresh_error="",
+        )
+        try:
+            latest_days = int(os.environ.get("LATEST_DAYS", "7"))
+            latest_days = max(latest_days, 1)
+            end_date = datetime.now(timezone.utc).date()
+            start_date = end_date - timedelta(days=latest_days - 1)
+            refresh_orders_cache(DB_PATH, start_date, end_date)
+            refresh_products_cache(DB_PATH)
+            refresh_inventory_cache(DB_PATH)
+            db = get_db(DB_PATH)
+            orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+            items_count = db.execute("SELECT COUNT(*) FROM order_items").fetchone()[0]
+            products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
+            latest_order = db.execute("SELECT MAX(date(completed_date)) FROM orders").fetchone()[0]
+            db.close()
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                orders_count=str(orders_count),
+                items_count=str(items_count),
+                products_count=str(products_count),
+                inventory_count=str(inventory_count),
+                latest_order_date=latest_order or "",
+            )
+        except Exception as exc:
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                refresh_error=f"{exc}\n{traceback.format_exc()}",
+            )
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(_run, "cron", hour=hour, minute=minute)
+    scheduler.add_job(_run_latest, "interval", minutes=5)
     scheduler.start()
 
 

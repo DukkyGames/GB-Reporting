@@ -372,11 +372,11 @@ def refresh_orders_cache(path: str, start_date: date, end_date: date) -> None:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute(
-        "DELETE FROM orders WHERE date(completed_date) BETWEEN ? AND ?",
+        "DELETE FROM order_items WHERE order_id IN (SELECT order_id FROM orders WHERE date(completed_date) BETWEEN ? AND ?)",
         (start_date.isoformat(), end_date.isoformat()),
     )
     db.execute(
-        "DELETE FROM order_items WHERE order_id IN (SELECT order_id FROM orders WHERE date(completed_date) BETWEEN ? AND ?)",
+        "DELETE FROM orders WHERE date(completed_date) BETWEEN ? AND ?",
         (start_date.isoformat(), end_date.isoformat()),
     )
 
@@ -518,6 +518,25 @@ def refresh_orders_cache(path: str, start_date: date, end_date: date) -> None:
                 ),
             )
 
+    db.commit()
+    db.close()
+
+
+def clear_orders_cache(path: str) -> None:
+    db = sqlite3.connect(path, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("DELETE FROM order_items")
+    db.execute("DELETE FROM orders")
+    db.commit()
+    db.close()
+
+
+def clear_products_cache(path: str) -> None:
+    db = sqlite3.connect(path, timeout=30)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("DELETE FROM products")
     db.commit()
     db.close()
 

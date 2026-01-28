@@ -3,14 +3,17 @@
 {% block controls %}
 <section class="panel control-panel">
   <div class="control-group">
-    <form method="post" action="{{ url_for('refresh_orders') }}" class="inline-form">
+    <form method="post" action="{{ url_for('refresh_orders') }}" class="inline-form" data-confirm="This will clear all orders and reload from WineDirect. Continue?">
       <button type="submit" class="primary-btn">Refresh Orders</button>
     </form>
-    <form method="post" action="{{ url_for('refresh_products') }}" class="inline-form">
+    <form method="post" action="{{ url_for('refresh_products') }}" class="inline-form" data-confirm="This will clear all products and reload from WineDirect. Continue?">
       <button type="submit" class="primary-btn">Refresh Products</button>
     </form>
-    <form method="post" action="{{ url_for('refresh_inventory') }}" class="inline-form">
+    <form method="post" action="{{ url_for('refresh_inventory') }}" class="inline-form" data-confirm="This will clear all inventory and reload from WineDirect. Continue?">
       <button type="submit" class="primary-btn">Refresh Inventory</button>
+    </form>
+    <form method="post" action="{{ url_for('refresh_latest') }}" class="inline-form">
+      <button type="submit" class="primary-btn">Update Latest Data</button>
     </form>
     <form method="post" action="{{ url_for('rate_check') }}" class="inline-form">
       <button type="submit" class="primary-btn">Rate Check</button>
@@ -107,6 +110,15 @@
 
 {% block scripts %}
 <script>
+  document.querySelectorAll("form[data-confirm]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      const message = form.getAttribute("data-confirm") || "Are you sure?";
+      if (!window.confirm(message)) {
+        event.preventDefault();
+      }
+    });
+  });
+
   const statusFields = document.querySelectorAll("[data-cache-status]");
   const statusMap = {};
   for (const field of statusFields) {
