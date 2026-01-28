@@ -284,12 +284,41 @@ def _tours_report(start_date: date, end_date: date, experience_filter: list[str]
     discounts = float(df_latest["discount"].fillna(0).sum())
     avg_party = total_guests / total_bookings if total_bookings else 0
     avg_rev_per_guest = gross_sales / total_guests if total_guests else 0
+    avg_purchase_per_tour = 0.0
+    total_wine_sales = 0.0
+    if total_bookings:
+        emails = (
+            df_latest["email"]
+            .fillna("")
+            .str.lower()
+            .str.strip()
+            .loc[lambda s: s != ""]
+            .unique()
+            .tolist()
+        )
+        if emails:
+            orders_df = pd.read_sql_query(
+                "SELECT bill_email, order_total, completed_date FROM orders",
+                get_db(DB_PATH),
+            )
+            orders_df["bill_email"] = orders_df["bill_email"].fillna("").str.lower().str.strip()
+            orders_df["completed_date"] = pd.to_datetime(orders_df["completed_date"], errors="coerce")
+            orders_df = orders_df.dropna(subset=["completed_date"])
+            orders_df = orders_df[
+                (orders_df["completed_date"].dt.date >= start_date)
+                & (orders_df["completed_date"].dt.date <= end_date)
+            ]
+            orders_df = orders_df[orders_df["bill_email"].isin(emails)]
+            orders_df["order_total"] = pd.to_numeric(orders_df["order_total"], errors="coerce").fillna(0)
+            total_wine_sales = float(orders_df["order_total"].sum())
+            avg_purchase_per_tour = total_wine_sales / total_bookings if total_bookings else 0
 
     kpis = [
         ("Bookings", f"{total_bookings:,}"),
         ("Guests", f"{total_guests:,}"),
         ("Gross Sales", f"${gross_sales:,.2f}"),
         ("Collected", f"${collected:,.2f}"),
+        ("Avg Purchase / Tour", f"${avg_purchase_per_tour:,.2f}"),
         ("Comps", f"${comps:,.2f}"),
         ("Discounts", f"${discounts:,.2f}"),
         ("Avg Party Size", f"{avg_party:,.1f}"),
@@ -308,7 +337,7 @@ def _tours_report(start_date: date, end_date: date, experience_filter: list[str]
         )
         .reset_index()
     )
-    label_fmt = "%b %d" if use_daily else "%b %Y"
+    label_fmt = "%b %d, %Y" if use_daily else "%b %Y"
     monthly["label"] = monthly["booking_date"].dt.strftime(label_fmt)
 
     exp_counts = (
@@ -335,8 +364,31 @@ def _tours_report(start_date: date, end_date: date, experience_filter: list[str]
     }
 
     rows = df_latest.sort_values("booking_date", ascending=False).head(200)
+    emails = (
+        rows["email"]
+        .fillna("")
+        .str.lower()
+        .str.strip()
+        .loc[lambda s: s != ""]
+        .unique()
+        .tolist()
+    )
+    orders_by_email = set()
+    if emails:
+        db = get_db(DB_PATH)
+        email_rows = db.execute(
+            f"""
+            SELECT DISTINCT lower(bill_email) AS email
+            FROM orders
+            WHERE lower(bill_email) IN ({",".join(["?"] * len(emails))})
+            """,
+            emails,
+        ).fetchall()
+        db.close()
+        orders_by_email = {row["email"] for row in email_rows if row["email"]}
     table = []
     for _, row in rows.iterrows():
+        email = (row.get("email") or "").strip().lower()
         table.append(
             {
                 "booking_date": row.get("booking_date").strftime("%Y-%m-%d") if not pd.isna(row.get("booking_date")) else "",
@@ -344,7 +396,9 @@ def _tours_report(start_date: date, end_date: date, experience_filter: list[str]
                 "party_size": int(row.get("party_size") or 0),
                 "total_price": float(row.get("total_price") or 0),
                 "payment_collected": float(row.get("payment_collected") or 0),
-                "confirmation_code": row.get("confirmation_code") or "",
+                "customer": f"{row.get('first_name') or ''} {row.get('last_name') or ''}".strip(),
+                "email": email,
+                "has_orders": email in orders_by_email,
             }
         )
 
@@ -960,6 +1014,61 @@ def order_detail(order_id: str):
         order=order,
         items=items,
         raw_pretty=raw_pretty,
+    )
+
+
+@app.route("/orders/by-email")
+@login_required
+def orders_by_email():
+    email = (request.args.get("email") or "").strip().lower()
+    if not email:
+        flash("Missing customer email.", "error")
+        return redirect(url_for("orders"))
+    db = get_db(DB_PATH)
+    rows = db.execute(
+        """
+        SELECT order_id, order_number, completed_date,
+               bill_first_name, bill_last_name, order_type, order_status, ship_state, order_total, pickup
+        FROM orders
+        WHERE lower(bill_email) = ?
+        ORDER BY date(completed_date) DESC
+        LIMIT 200
+        """,
+        (email,),
+    ).fetchall()
+    db.close()
+    orders_rows = []
+    for row in rows:
+        completed_raw = str(row["completed_date"] or "")
+        if len(completed_raw) == 10:
+            completed_local = completed_raw
+        else:
+            try:
+                completed_dt = datetime.fromisoformat(completed_raw.replace("Z", "+00:00"))
+                completed_local = completed_dt.astimezone(PACIFIC_TZ).strftime("%Y-%m-%d")
+            except ValueError:
+                completed_local = completed_raw
+        orders_rows.append({**dict(row), "completed_date": completed_local})
+    return render_template(
+        "orders.html",
+        orders=orders_rows,
+        order_types=[],
+        query="",
+        range_key="custom",
+        page=1,
+        total_pages=1,
+        total_rows=len(orders_rows),
+        per_page=len(orders_rows),
+        prev_url=None,
+        next_url=None,
+        start_date="",
+        end_date="",
+        order_type="",
+        order_status="",
+        ship_state="",
+        pickup="",
+        min_total="",
+        max_total="",
     )
 
 

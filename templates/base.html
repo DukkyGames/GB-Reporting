@@ -160,6 +160,9 @@
       document.querySelectorAll("form[data-autosubmit]").forEach((form) => {
         const storageKey = `filters:${window.location.pathname}`;
         let timer = null;
+        const rangeSelect = form.querySelector("select[name='range']");
+        const startInput = form.querySelector("input[name='start']");
+        const endInput = form.querySelector("input[name='end']");
 
         const loadSaved = () => {
           if (window.location.search) {
@@ -220,6 +223,15 @@
               saveCurrent();
               form.requestSubmit();
             }, 400);
+          });
+        });
+        [startInput, endInput].forEach((field) => {
+          if (!field || !rangeSelect) return;
+          field.addEventListener("change", () => {
+            rangeSelect.value = "custom";
+          });
+          field.addEventListener("input", () => {
+            rangeSelect.value = "custom";
           });
         });
       });

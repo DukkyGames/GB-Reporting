@@ -94,26 +94,34 @@
           <thead>
             <tr>
               <th>Date</th>
+              <th>Customer</th>
               <th>Experience</th>
               <th>Party Size</th>
               <th>Total Price</th>
               <th>Collected</th>
-              <th>Confirmation</th>
+              <th>Orders</th>
             </tr>
           </thead>
           <tbody>
             {% for row in report.table %}
               <tr>
                 <td>{{ row.booking_date }}</td>
+                <td>{{ row.customer }}</td>
                 <td>{{ row.experience }}</td>
                 <td>{{ row.party_size }}</td>
                 <td>${{ "%.2f"|format(row.total_price) }}</td>
                 <td>${{ "%.2f"|format(row.payment_collected) }}</td>
-                <td class="mono">{{ row.confirmation_code }}</td>
+                <td>
+                  {% if row.has_orders %}
+                    <a class="ghost-btn" href="{{ url_for('orders_by_email', email=row.email) }}">Show Orders</a>
+                  {% else %}
+                    <span class="ghost-btn is-disabled">Show Orders</span>
+                  {% endif %}
+                </td>
               </tr>
             {% else %}
               <tr>
-                <td colspan="6">No bookings for this range.</td>
+                <td colspan="7">No bookings for this range.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -164,7 +172,7 @@
         });
 
         document.addEventListener("click", (event) => {
-          if (!dropdown.contains(event.target)) {
+          if (!dropdown.contains(event.target) && menu.classList.contains("open")) {
             menu.classList.remove("open");
             if (form) {
               form.requestSubmit();
@@ -176,12 +184,29 @@
       }
 
       const charts = {{ report.charts | default({}) | tojson }};
+      const hasDailyLabels = (labels) =>
+        (labels || []).some((label) => typeof label === "string" && label.includes(","));
+      const chartBottomMargin = (labels) => (hasDailyLabels(labels) ? 120 : 50);
+      const buildTicks = (labels) => {
+        if (!labels || !labels.length) return {};
+        const daily = hasDailyLabels(labels);
+        return {
+          tickmode: "array",
+          tickvals: labels,
+          ticktext: labels,
+          tickangle: daily ? -60 : -35,
+          tickfont: { size: daily ? 9 : 10 },
+          ticklabelstandoff: 6,
+          ticklabeloverflow: "allow",
+          automargin: true,
+        };
+      };
       if (!charts || !charts.monthly) return;
       const fullExperienceLabels = charts.experiences?.labels || [];
       const truncateLabel = (label, maxLen = 28) => {
         if (!label) return "";
         if (label.length <= maxLen) return label;
-        return label.slice(0, Math.max(0, maxLen - 1)) + "…";
+        return label.slice(0, Math.max(0, maxLen - 1)) + "...";
       };
       const shortExperienceLabels = fullExperienceLabels.map((label) => truncateLabel(label));
 
@@ -205,8 +230,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 40, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(charts.monthly.labels || []), l: 50 },
           barmode: "group",
+          xaxis: buildTicks(charts.monthly.labels || []),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -223,8 +249,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 40, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(charts.monthly.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
+          xaxis: buildTicks(charts.monthly.labels || []),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -272,3 +299,4 @@
     })();
   </script>
 {% endblock %}
+

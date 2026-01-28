@@ -525,7 +525,7 @@ def export_tours_pdf(report: dict, start_date: date, end_date: date) -> BytesIO:
 
     if report.get("table"):
         story.append(Paragraph("Latest Bookings", styles["Section"]))
-        rows = [["Date", "Experience", "Party Size", "Total Price", "Collected", "Confirmation"]]
+        rows = [["Date", "Experience", "Party Size", "Total Price", "Collected", "Customer"]]
         for row in report["table"]:
             rows.append(
                 [
@@ -534,7 +534,7 @@ def export_tours_pdf(report: dict, start_date: date, end_date: date) -> BytesIO:
                     str(row.get("party_size", "")),
                     f"${row.get('total_price', 0):,.2f}",
                     f"${row.get('payment_collected', 0):,.2f}",
-                    str(row.get("confirmation_code", "")),
+                    str(row.get("customer", "")),
                 ]
             )
         story.append(_build_table(rows, col_widths=[0.9 * inch, 2.2 * inch, 0.8 * inch, 1.0 * inch, 1.0 * inch, 1.2 * inch]))

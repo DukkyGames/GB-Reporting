@@ -198,6 +198,12 @@ body {
   border: 1px solid var(--border);
 }
 
+.ghost-btn.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .page {
   padding: 28px 36px 60px;
   margin: 0 auto;

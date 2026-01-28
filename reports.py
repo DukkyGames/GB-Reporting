@@ -225,7 +225,7 @@ def build_report_timeseries(db_path: str, start_date: date, end_date: date, gran
             units=("units", "sum"),
         ).reset_index()
         grouped = grouped.sort_values("completed_local")
-        labels = [d.strftime("%b %d") for d in pd.to_datetime(grouped["completed_local"]).dt.date]
+        labels = [d.strftime("%b %d, %Y") for d in pd.to_datetime(grouped["completed_local"]).dt.date]
     else:
         orders["month"] = orders["completed_date"].dt.to_period("M").dt.to_timestamp()
         grouped = orders.groupby("month").agg(

@@ -177,6 +177,24 @@
   <script>
     (function () {
       const charts = {{ report.charts | tojson }};
+      const isSingleMonth = {{ is_single_month | tojson }};
+      const hasDailyLabels = (labels) =>
+        (labels || []).some((label) => typeof label === "string" && label.includes(","));
+      const chartBottomMargin = (labels) => (hasDailyLabels(labels) ? 120 : 50);
+      const buildTicks = (labels) => {
+        if (!labels || !labels.length) return {};
+        const daily = hasDailyLabels(labels);
+        return {
+          tickmode: "array",
+          tickvals: labels,
+          ticktext: labels,
+          tickangle: daily ? -60 : -35,
+          tickfont: { size: daily ? 9 : 10 },
+          ticklabelstandoff: 6,
+          ticklabeloverflow: "allow",
+          automargin: true,
+        };
+      };
       const toursCharts = {{ tours_report.charts | default({}) | tojson }};
       if (!charts) return;
       const monthLabels = charts.monthly.labels || [];
@@ -199,8 +217,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 40, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
           yaxis: { tickprefix: "$" },
+          xaxis: buildTicks(monthLabels),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -227,8 +246,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 40, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
           barmode: "group",
+          xaxis: buildTicks(monthLabels),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -313,8 +333,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 60, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(charts.sales_by_channel.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
+          xaxis: buildTicks(charts.sales_by_channel.labels || []),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -331,8 +352,9 @@
           },
         ],
         {
-          margin: { t: 10, r: 10, b: 40, l: 50 },
+          margin: { t: 10, r: 10, b: chartBottomMargin(charts.top_states.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
+          xaxis: buildTicks(charts.top_states.labels || []),
         },
         { displayModeBar: false, responsive: true }
       );
@@ -358,8 +380,9 @@
             },
           ],
           {
-            margin: { t: 10, r: 10, b: 40, l: 50 },
+            margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
             barmode: "group",
+            xaxis: buildTicks(toursCharts.monthly.labels || []),
           },
           { displayModeBar: false, responsive: true }
         );
@@ -376,8 +399,9 @@
             },
           ],
           {
-            margin: { t: 10, r: 10, b: 40, l: 50 },
+            margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
             yaxis: { tickprefix: "$" },
+            xaxis: buildTicks(toursCharts.monthly.labels || []),
           },
           { displayModeBar: false, responsive: true }
         );
