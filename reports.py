@@ -109,7 +109,7 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
         ("Net Sales", _money0(net_sales)),
         ("Total Collected", _money0(order_total)),
         ("Orders", f"{total_orders:,}"),
-        ("Units Sold", f"{int(total_units):,}"),
+        ("Bottles Sold", f"{int(total_units):,}"),
         ("Avg Order Value", _money0(aov)),
         ("Avg Bottle Price", _money2(avg_bottle_price)),
         ("Unique Customers", f"{unique_customers:,}"),

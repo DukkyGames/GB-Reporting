@@ -394,14 +394,43 @@ def inventory():
 @login_required
 def orders():
     query = request.args.get("q", "").strip()
+    range_key = request.args.get("range", "custom")
     start_date = _parse_date(request.args.get("start"))
     end_date = _parse_date(request.args.get("end"))
+    page = max(int(request.args.get("page", "1") or 1), 1)
+    per_page = 100
     order_type = request.args.get("order_type", "").strip()
     order_status = request.args.get("order_status", "").strip()
     ship_state = request.args.get("ship_state", "").strip()
     pickup = request.args.get("pickup", "").strip()
     min_total = request.args.get("min_total", "").strip()
     max_total = request.args.get("max_total", "").strip()
+
+    today = _report_today()
+    if range_key == "this_month":
+        start_date = date(today.year, today.month, 1)
+        end_date = today
+    elif range_key == "last_month":
+        first_this_month = date(today.year, today.month, 1)
+        prev_month_last = first_this_month - timedelta(days=1)
+        start_date = date(prev_month_last.year, prev_month_last.month, 1)
+        end_date = prev_month_last
+    elif range_key == "last_3_months":
+        start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
+        end_date = today
+    elif range_key == "last_12_months":
+        start_date = date(_add_months(today, -11).year, _add_months(today, -11).month, 1)
+        end_date = today
+    elif range_key == "ytd":
+        start_date = date(today.year, 1, 1)
+        end_date = today
+    elif range_key == "custom":
+        pass
+    else:
+        range_key = "custom"
+
+    if start_date and end_date and start_date > end_date:
+        start_date, end_date = end_date, start_date
 
     filters = []
     params = []
@@ -445,6 +474,14 @@ def orders():
     else:
         pass
     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    count_row = db.execute(
+        f"SELECT COUNT(*) FROM orders {where_clause}",
+        params,
+    ).fetchone()
+    total_rows = int(count_row[0] if count_row else 0)
+    total_pages = max((total_rows + per_page - 1) // per_page, 1)
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
     rows = db.execute(
         f"""
         SELECT order_id, order_number, completed_date,
@@ -452,9 +489,9 @@ def orders():
         FROM orders
         {where_clause}
         ORDER BY CAST(order_number AS INTEGER) DESC, order_number DESC
-        LIMIT 500
+        LIMIT ? OFFSET ?
         """,
-        params,
+        params + [per_page, offset],
     ).fetchall()
     db.close()
     orders_rows = []
@@ -469,11 +506,26 @@ def orders():
             except ValueError:
                 completed_local = completed_raw
         orders_rows.append({**dict(row), "completed_date": completed_local})
+    base_params = {k: v for k, v in request.args.items() if k != "page"}
+    prev_url = None
+    next_url = None
+    if page > 1:
+        prev_url = url_for("orders", **{**base_params, "page": page - 1})
+    if page < total_pages:
+        next_url = url_for("orders", **{**base_params, "page": page + 1})
+
     return render_template(
         "orders.html",
         orders=orders_rows,
         order_types=order_types,
         query=query,
+        range_key=range_key,
+        page=page,
+        total_pages=total_pages,
+        total_rows=total_rows,
+        per_page=per_page,
+        prev_url=prev_url,
+        next_url=next_url,
         start_date=start_date.isoformat() if start_date else "",
         end_date=end_date.isoformat() if end_date else "",
         order_type=order_type,

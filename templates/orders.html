@@ -6,14 +6,9 @@
       Search
       <input type="text" name="q" placeholder="Order ID, order #, customer" value="{{ query }}" />
     </label>
-    <label>
-      Start
-      <input type="date" name="start" value="{{ start_date }}" />
-    </label>
-    <label>
-      End
-      <input type="date" name="end" value="{{ end_date }}" />
-    </label>
+    <input type="hidden" name="range" value="{{ range_key }}" />
+    <input type="hidden" name="start" value="{{ start_date }}" />
+    <input type="hidden" name="end" value="{{ end_date }}" />
     <label>
       Order Type
       <select name="order_type">
@@ -59,7 +54,7 @@
   <section class="panel table-panel">
     <div class="panel-head">
       <h2>Orders</h2>
-      <p>Latest 200 orders{% if query %} matching "{{ query }}"{% endif %}.</p>
+      <p>Showing {{ per_page }} per page ({{ total_rows }} total){% if query %} matching "{{ query }}"{% endif %}.</p>
     </div>
     <div class="table-wrap">
       <table>
@@ -94,6 +89,15 @@
           {% endfor %}
         </tbody>
       </table>
+    </div>
+    <div class="control-group">
+      {% if prev_url %}
+        <a class="ghost-btn" href="{{ prev_url }}">Prev</a>
+      {% endif %}
+      <span>Page {{ page }} of {{ total_pages }}</span>
+      {% if next_url %}
+        <a class="ghost-btn" href="{{ next_url }}">Next</a>
+      {% endif %}
     </div>
   </section>
 {% endblock %}

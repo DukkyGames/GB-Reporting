@@ -1,36 +1,16 @@
 {% extends "base.html" %}
 
-{% block controls %}
-  <form class="date-form" method="get" action="{{ url_for('products_report') }}" data-autosubmit>
-    <label>
-      Range
-      <select name="range">
-        <option value="this_month" {% if range_key == "this_month" %}selected{% endif %}>This month</option>
-        <option value="last_month" {% if range_key == "last_month" %}selected{% endif %}>Last month</option>
-        <option value="last_3_months" {% if range_key == "last_3_months" %}selected{% endif %}>Last 3 months</option>
-        <option value="last_12_months" {% if range_key == "last_12_months" %}selected{% endif %}>Last 12 months</option>
-        <option value="ytd" {% if range_key == "ytd" %}selected{% endif %}>Year to date</option>
-        <option value="custom" {% if range_key == "custom" %}selected{% endif %}>Custom</option>
-      </select>
-    </label>
-    <label>
-      Start
-      <input type="date" name="start" value="{{ start_date }}" />
-    </label>
-    <label>
-      End
-      <input type="date" name="end" value="{{ end_date }}" />
-    </label>
-    <label class="inline-check">
-      <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
-      Cases
-    </label>
-    <label class="inline-check">
-      <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
-      Bottles
-    </label>
-    
-  </form>
+{% set preserve_skip = ["unit"] %}
+
+{% block global_filters %}
+  <label class="inline-check">
+    <input type="radio" name="unit" value="case" {% if unit == "case" %}checked{% endif %} />
+    Cases
+  </label>
+  <label class="inline-check">
+    <input type="radio" name="unit" value="bottle" {% if unit != "case" %}checked{% endif %} />
+    Bottles
+  </label>
 {% endblock %}
 
 {% block content %}

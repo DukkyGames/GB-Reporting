@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Grimm's Bluff Dashboard</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo.png') }}" />
 </head>
 <body>
+  {% set current_range = range_key|default(request.args.get("range", "custom")) %}
+  {% set current_start = start_date|default(request.args.get("start", "")) %}
+  {% set current_end = end_date|default(request.args.get("end", "")) %}
+  {% set preserve_skip = preserve_skip|default([]) %}
   <header class="topbar">
     <div class="brand">
       <a class="brand-link" href="{{ url_for('dashboard') }}">
@@ -27,6 +32,33 @@
       <a class="ghost-btn" href="{{ url_for('cache_view') }}">Cache</a>
       <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
     </div>
+    <form class="date-form" method="get" action="{{ request.path }}" data-autosubmit>
+      <label>
+        Range
+        <select name="range">
+          <option value="this_month" {% if current_range == "this_month" %}selected{% endif %}>This month</option>
+          <option value="last_month" {% if current_range == "last_month" %}selected{% endif %}>Last month</option>
+          <option value="last_3_months" {% if current_range == "last_3_months" %}selected{% endif %}>Last 3 months</option>
+          <option value="last_12_months" {% if current_range == "last_12_months" %}selected{% endif %}>Last 12 months</option>
+          <option value="ytd" {% if current_range == "ytd" %}selected{% endif %}>Year to date</option>
+          <option value="custom" {% if current_range == "custom" %}selected{% endif %}>Custom</option>
+        </select>
+      </label>
+      <label>
+        Start
+        <input type="date" name="start" value="{{ current_start }}" />
+      </label>
+      <label>
+        End
+        <input type="date" name="end" value="{{ current_end }}" />
+      </label>
+      {% for key, value in request.args.items() %}
+        {% if key not in ["range", "start", "end"] and key not in preserve_skip %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}" />
+        {% endif %}
+      {% endfor %}
+      {% block global_filters %}{% endblock %}
+    </form>
   </header>
 
   <main class="page">

@@ -1,30 +1,5 @@
 ﻿{% extends "base.html" %}
 
-{% block controls %}
-  <form class="date-form" method="get" action="{{ url_for('dashboard') }}" data-autosubmit>
-    <label>
-      Range
-      <select name="range">
-        <option value="this_month" {% if range_key == "this_month" %}selected{% endif %}>This month</option>
-        <option value="last_month" {% if range_key == "last_month" %}selected{% endif %}>Last month</option>
-        <option value="last_3_months" {% if range_key == "last_3_months" %}selected{% endif %}>Last 3 months</option>
-        <option value="last_12_months" {% if range_key == "last_12_months" %}selected{% endif %}>Last 12 months</option>
-        <option value="ytd" {% if range_key == "ytd" %}selected{% endif %}>Year to date</option>
-        <option value="custom" {% if range_key == "custom" %}selected{% endif %}>Custom</option>
-      </select>
-    </label>
-    <label>
-      Start
-      <input type="date" name="start" value="{{ start_date }}" />
-    </label>
-    <label>
-      End
-      <input type="date" name="end" value="{{ end_date }}" />
-    </label>
-    
-  </form>
-{% endblock %}
-
 {% block content %}
   {% if report.empty %}
     <section class="panel">
@@ -42,7 +17,7 @@
           "Net Sales": "icons/Net Sales.png",
           "Total Collected": "icons/Total Collected.png",
           "Orders": "icons/Orders.png",
-          "Units Sold": "icons/Units Sold.png",
+          "Bottles Sold": "icons/Units Sold.png",
           "Avg Order Value": "icons/Avg order value.png",
           "Avg Bottle Price": "icons/Average Bottle Price.png",
           "Unique Customers": "icons/Unique Customers.png",

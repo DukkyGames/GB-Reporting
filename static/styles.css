@@ -151,6 +151,20 @@ body {
   color: #fff;
 }
 
+.date-form select option {
+  background: #0b2a30;
+  color: #fff;
+}
+
+.topbar .date-form .inline-check {
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.topbar .date-form .inline-check input {
+  margin: 0;
+}
+
 .controls-panel .date-form label {
   color: var(--ink);
 }
@@ -167,6 +181,14 @@ body {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.panel .ghost-btn {
+  background: var(--surface);
+  color: var(--teal-dark);
+  border: 1px solid var(--border);
 }
 
 .page {
