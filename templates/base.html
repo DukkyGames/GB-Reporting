@@ -9,17 +9,21 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="brand-mark">
-        <img src="{{ url_for('static', filename='Logo.png') }}" alt="Grimm's Bluff logo" />
-      </div>
-      <div>
-        <h1>Grimm's Bluff Dashboard</h1>
-        <p>Because WineDirect sucks</p>
-      </div>
+      <a class="brand-link" href="{{ url_for('dashboard') }}">
+        <div class="brand-mark">
+          <img src="{{ url_for('static', filename='Logo.png') }}" alt="Grimm's Bluff logo" />
+        </div>
+        <div>
+          <h1>Grimm's Bluff Dashboard</h1>
+          <p>Because WineDirect sucks</p>
+        </div>
+      </a>
     </div>
     <div class="controls">
-      {% block controls %}{% endblock %}
+      <a class="ghost-btn" href="{{ url_for('dashboard') }}">Dashboard</a>
       <a class="ghost-btn" href="{{ url_for('orders') }}">Orders</a>
+      <a class="ghost-btn" href="{{ url_for('products_report') }}">Products Report</a>
+      <a class="ghost-btn" href="{{ url_for('cache_view') }}">Cache</a>
       <a class="ghost-btn" href="{{ url_for('inventory') }}">Inventory</a>
       <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
     </div>
@@ -35,7 +39,13 @@
         </div>
       {% endif %}
     {% endwith %}
-
+    <section class="panel controls-panel">
+      <div class="controls-panel-head">
+      </div>
+      <div class="controls-panel-body">
+        {% block controls %}{% endblock %}
+      </div>
+    </section>
     {% block content %}{% endblock %}
   </main>
 

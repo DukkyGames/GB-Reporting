@@ -148,6 +148,110 @@ def build_report(db_path: str, start_date: date, end_date: date) -> dict:
     }
 
 
+def build_products_report(db_path: str, start_date: date, end_date: date) -> dict:
+    db = get_db(db_path)
+    orders = pd.read_sql_query(
+        "SELECT order_id, order_type FROM orders WHERE date(completed_date) BETWEEN ? AND ?",
+        db,
+        params=(start_date.isoformat(), end_date.isoformat()),
+    )
+    items = pd.read_sql_query(
+        """
+        SELECT order_id, sku, product_name, quantity, net_sales, price
+        FROM order_items
+        WHERE order_id IN (
+            SELECT order_id FROM orders WHERE date(completed_date) BETWEEN ? AND ?
+        )
+        """,
+        db,
+        params=(start_date.isoformat(), end_date.isoformat()),
+    )
+    inventory = pd.read_sql_query(
+        "SELECT sku, current_inventory FROM inventory",
+        db,
+    )
+    db.close()
+
+    if orders.empty or items.empty:
+        return {"empty": True, "skus": [], "top_skus": [], "inventory": []}
+
+    merged = items.merge(orders, on="order_id", how="left")
+    merged["sku"] = merged["sku"].fillna("")
+    merged["product_name"] = merged["product_name"].fillna("")
+    merged["quantity"] = pd.to_numeric(merged["quantity"], errors="coerce").fillna(0)
+    merged["net_sales"] = pd.to_numeric(merged["net_sales"], errors="coerce").fillna(0)
+    merged["price"] = pd.to_numeric(merged["price"], errors="coerce").fillna(0)
+    merged["calc_sales"] = merged["net_sales"]
+    missing_sales = merged["calc_sales"] <= 0
+    merged.loc[missing_sales, "calc_sales"] = merged.loc[missing_sales, "price"] * merged.loc[missing_sales, "quantity"]
+
+    grouped = (
+        merged.groupby(["sku", "product_name", "order_type"], dropna=False)
+        .agg(cases_sold=("quantity", "sum"), net_sales=("calc_sales", "sum"))
+        .reset_index()
+    )
+    grouped["avg_sale"] = grouped.apply(
+        lambda row: row["net_sales"] / row["cases_sold"] if row["cases_sold"] else 0, axis=1
+    )
+
+    sku_totals = (
+        grouped.groupby(["sku", "product_name"])
+        .agg(cases_sold=("cases_sold", "sum"), net_sales=("net_sales", "sum"))
+        .reset_index()
+    )
+    sku_totals["avg_sale"] = sku_totals.apply(
+        lambda row: row["net_sales"] / row["cases_sold"] if row["cases_sold"] else 0, axis=1
+    )
+
+    skus = []
+    for _, row in sku_totals.sort_values("cases_sold", ascending=False).iterrows():
+        sku = row["sku"] or "Unknown SKU"
+        name = row["product_name"] or sku
+        rows = grouped[(grouped["sku"] == row["sku"]) & (grouped["product_name"] == row["product_name"])]
+        detail_rows = [
+            {
+                "order_type": r["order_type"] or "Unknown",
+                "sku": r["sku"],
+                "name": r["product_name"] or r["sku"],
+                "cases_sold": float(r["cases_sold"]),
+                "net_sales": float(r["net_sales"]),
+                "avg_sale": float(r["avg_sale"]),
+            }
+            for _, r in rows.iterrows()
+        ]
+        skus.append(
+            {
+                "sku": sku,
+                "name": name,
+                "total_cases": float(row["cases_sold"]),
+                "total_sales": float(row["net_sales"]),
+                "avg_sale": float(row["avg_sale"]),
+                "rows": detail_rows,
+            }
+        )
+
+    top_skus = sku_totals.sort_values("cases_sold", ascending=False).head(15).to_dict("records")
+    inventory_summary = []
+    if not inventory.empty:
+        inv = inventory.copy()
+        inv["current_inventory"] = pd.to_numeric(inv["current_inventory"], errors="coerce").fillna(0)
+        inventory_summary = (
+            inv.groupby("sku")
+            .agg(total_inventory=("current_inventory", "sum"))
+            .reset_index()
+            .sort_values("total_inventory", ascending=False)
+            .head(30)
+            .to_dict("records")
+        )
+
+    return {
+        "empty": False,
+        "skus": skus,
+        "top_skus": top_skus,
+        "inventory": inventory_summary,
+    }
+
+
 def _chart_monthly_net_sales(monthly: pd.DataFrame) -> str:
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(monthly["month"], monthly["net_sales"], marker="o", color="#0f8da0")
@@ -179,7 +283,7 @@ def _chart_sales_by_channel(channel: pd.DataFrame) -> str:
 
 
 def _chart_top_products(df: pd.DataFrame, value_col: str, title: str) -> str:
-    fig, ax = plt.subplots(figsize=(6, 3.2))
+    fig, ax = plt.subplots(figsize=(6, 7))
     labels = df["sku"].fillna("")
     ax.barh(labels, df[value_col], color="#5c8ef2")
     ax.set_title(title)

@@ -24,11 +24,12 @@ from cache import (
     ensure_admin_user,
     refresh_orders_cache,
     refresh_products_cache,
+    refresh_inventory_cache,
     rate_limit_check,
     set_cache_status,
     get_cache_status,
 )
-from reports import build_report
+from reports import build_report, build_products_report
 from exporters import export_excel, export_pdf
 
 load_dotenv()
@@ -142,6 +143,7 @@ def _build_cache_status() -> dict:
         "orders_count": status.get("orders_count") or "0",
         "items_count": status.get("items_count") or "0",
         "products_count": status.get("products_count") or "0",
+        "inventory_count": status.get("inventory_count") or "0",
         "latest_order_date": status.get("latest_order_date") or "—",
         "rate_limit_limit": status.get("rate_limit_limit") or "—",
         "rate_limit_remaining": status.get("rate_limit_remaining") or "—",
@@ -207,11 +209,58 @@ def dashboard():
         start_date, end_date = end_date, start_date
 
     report = build_report(DB_PATH, start_date, end_date)
-    cache_status = _build_cache_status()
     return render_template(
         "dashboard.html",
         report=report,
-        cache_status=cache_status,
+        range_key=range_key,
+        start_date=start_date.isoformat(),
+        end_date=end_date.isoformat(),
+    )
+
+
+@app.route("/cache", methods=["GET"])
+@login_required
+def cache_view():
+    cache_status = _build_cache_status()
+    return render_template("cache.html", cache_status=cache_status)
+
+
+@app.route("/products-report", methods=["GET"])
+@login_required
+def products_report():
+    range_key = request.args.get("range", "last_12_months")
+    start_default, end_default = _default_dates()
+    start_date = _parse_date(request.args.get("start")) or start_default
+    end_date = _parse_date(request.args.get("end")) or end_default
+
+    today = datetime.now(timezone.utc).date()
+    if range_key == "this_month":
+        start_date = date(today.year, today.month, 1)
+        end_date = today
+    elif range_key == "last_month":
+        first_this_month = date(today.year, today.month, 1)
+        prev_month_last = first_this_month - timedelta(days=1)
+        start_date = date(prev_month_last.year, prev_month_last.month, 1)
+        end_date = prev_month_last
+    elif range_key == "last_3_months":
+        start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
+        end_date = today
+    elif range_key == "last_12_months":
+        start_date = date(_add_months(today, -11).year, _add_months(today, -11).month, 1)
+        end_date = today
+    elif range_key == "ytd":
+        start_date = date(today.year, 1, 1)
+        end_date = today
+    elif range_key == "custom":
+        start_date = _parse_date(request.args.get("start")) or start_default
+        end_date = _parse_date(request.args.get("end")) or end_default
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
+    report = build_products_report(DB_PATH, start_date, end_date)
+    return render_template(
+        "products_report.html",
+        report=report,
         range_key=range_key,
         start_date=start_date.isoformat(),
         end_date=end_date.isoformat(),
@@ -223,10 +272,15 @@ def dashboard():
 def inventory():
     db = get_db(DB_PATH)
     rows = db.execute(
-        "SELECT sku, name, last_updated FROM products ORDER BY name LIMIT 200"
+        """
+        SELECT sku, inventory_pool, inventory_pool_id, website_id, current_inventory
+        FROM inventory
+        ORDER BY sku, inventory_pool
+        LIMIT 500
+        """
     ).fetchall()
     db.close()
-    return render_template("inventory.html", products=rows)
+    return render_template("inventory.html", inventory=rows)
 
 
 @app.route("/orders", methods=["GET"])
@@ -313,12 +367,11 @@ def export_pdf_route():
     return send_file(buffer, as_attachment=True, download_name=filename, mimetype="application/pdf")
 
 
-@app.route("/refresh", methods=["POST"])
+@app.route("/refresh/orders", methods=["POST"])
 @login_required
-def refresh_cache():
+def refresh_orders():
     start_date = None
     end_date = None
-    include_products = request.form.get("include_products") == "1"
     if not start_date or not end_date:
         cache_days = int(os.environ.get("CACHE_DAYS", "400"))
         cache_days = max(cache_days, 1)
@@ -334,12 +387,11 @@ def refresh_cache():
         )
         try:
             refresh_orders_cache(DB_PATH, start_date, end_date)
-            if include_products:
-                refresh_products_cache(DB_PATH)
             db = get_db(DB_PATH)
             orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
             items_count = db.execute("SELECT COUNT(*) FROM order_items").fetchone()[0]
             products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
             latest_order = db.execute("SELECT MAX(date(completed_date)) FROM orders").fetchone()[0]
             db.close()
             set_cache_status(
@@ -349,6 +401,7 @@ def refresh_cache():
                 orders_count=str(orders_count),
                 items_count=str(items_count),
                 products_count=str(products_count),
+                inventory_count=str(inventory_count),
                 latest_order_date=latest_order or "",
             )
         except Exception as exc:
@@ -361,6 +414,76 @@ def refresh_cache():
 
     Thread(target=_run, daemon=True).start()
     flash("Cache refresh started. It may take a few minutes.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/refresh/products", methods=["POST"])
+@login_required
+def refresh_products():
+    def _run():
+        set_cache_status(
+            DB_PATH,
+            refresh_in_progress="1",
+            refresh_started_at=datetime.now(timezone.utc).isoformat(),
+            refresh_error="",
+        )
+        try:
+            refresh_products_cache(DB_PATH)
+            db = get_db(DB_PATH)
+            products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
+            db.close()
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                products_count=str(products_count),
+                inventory_count=str(inventory_count),
+            )
+        except Exception as exc:
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                refresh_error=f"{exc}\n{traceback.format_exc()}",
+            )
+
+    Thread(target=_run, daemon=True).start()
+    flash("Products refresh started.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/refresh/inventory", methods=["POST"])
+@login_required
+def refresh_inventory():
+    def _run():
+        set_cache_status(
+            DB_PATH,
+            refresh_in_progress="1",
+            refresh_started_at=datetime.now(timezone.utc).isoformat(),
+            refresh_error="",
+        )
+        try:
+            refresh_inventory_cache(DB_PATH)
+            db = get_db(DB_PATH)
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
+            db.close()
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                inventory_count=str(inventory_count),
+            )
+        except Exception as exc:
+            set_cache_status(
+                DB_PATH,
+                refresh_finished_at=datetime.now(timezone.utc).isoformat(),
+                refresh_in_progress="0",
+                refresh_error=f"{exc}\n{traceback.format_exc()}",
+            )
+
+    Thread(target=_run, daemon=True).start()
+    flash("Inventory refresh started.", "info")
     return redirect(url_for("dashboard"))
 
 
@@ -399,10 +522,12 @@ def _schedule_cache_refresh():
         try:
             refresh_orders_cache(DB_PATH, start_date, end_date)
             refresh_products_cache(DB_PATH)
+            refresh_inventory_cache(DB_PATH)
             db = get_db(DB_PATH)
             orders_count = db.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
             items_count = db.execute("SELECT COUNT(*) FROM order_items").fetchone()[0]
             products_count = db.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+            inventory_count = db.execute("SELECT COUNT(*) FROM inventory").fetchone()[0]
             latest_order = db.execute("SELECT MAX(date(completed_date)) FROM orders").fetchone()[0]
             db.close()
             set_cache_status(
@@ -412,6 +537,7 @@ def _schedule_cache_refresh():
                 orders_count=str(orders_count),
                 items_count=str(items_count),
                 products_count=str(products_count),
+                inventory_count=str(inventory_count),
                 latest_order_date=latest_order or "",
             )
         except Exception as exc:

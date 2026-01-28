@@ -8,23 +8,31 @@
   <section class="panel">
     <div class="panel-head">
       <h2>Inventory</h2>
-      <p>Product list pulled from WineDirect Product Service.</p>
+      <p>Inventory snapshot pulled from WineDirect Inventory Service.</p>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>SKU</th>
-            <th>Product Name</th>
-            <th>Last Updated</th>
+            <th>Inventory Pool</th>
+            <th>Pool ID</th>
+            <th>Website</th>
+            <th>On Hand</th>
           </tr>
         </thead>
         <tbody>
-          {% for product in products %}
+          {% for row in inventory %}
             <tr>
-              <td>{{ product['sku'] }}</td>
-              <td>{{ product['name'] }}</td>
-              <td>{{ product['last_updated'] }}</td>
+              <td>{{ row['sku'] }}</td>
+              <td>{{ row['inventory_pool'] }}</td>
+              <td class="mono">{{ row['inventory_pool_id'] }}</td>
+              <td class="mono">{{ row['website_id'] }}</td>
+              <td>{{ row['current_inventory'] }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5">No inventory records found.</td>
             </tr>
           {% endfor %}
         </tbody>

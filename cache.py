@@ -143,6 +143,16 @@ def init_db(path: str) -> None:
             raw_json TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku TEXT,
+            inventory_pool TEXT,
+            inventory_pool_id TEXT,
+            website_id TEXT,
+            current_inventory REAL,
+            raw_json TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS cache_status (
             key TEXT PRIMARY KEY,
             value TEXT
@@ -152,6 +162,7 @@ def init_db(path: str) -> None:
     db.commit()
     _ensure_order_columns(db)
     _ensure_order_item_columns(db)
+    _ensure_inventory_columns(db)
     db.close()
 
 
@@ -257,6 +268,23 @@ def _ensure_order_item_columns(db: sqlite3.Connection) -> None:
     for name, col_type in columns.items():
         if name not in existing:
             db.execute(f"ALTER TABLE order_items ADD COLUMN {name} {col_type}")
+    db.commit()
+
+
+def _ensure_inventory_columns(db: sqlite3.Connection) -> None:
+    cursor = db.execute("PRAGMA table_info(inventory)")
+    existing = {row[1] for row in cursor.fetchall()}
+    columns = {
+        "sku": "TEXT",
+        "inventory_pool": "TEXT",
+        "inventory_pool_id": "TEXT",
+        "website_id": "TEXT",
+        "current_inventory": "REAL",
+        "raw_json": "TEXT",
+    }
+    for name, col_type in columns.items():
+        if name not in existing:
+            db.execute(f"ALTER TABLE inventory ADD COLUMN {name} {col_type}")
     db.commit()
 
 
@@ -512,6 +540,32 @@ def refresh_products_cache(path: str) -> None:
                 product.get("name"),
                 product.get("last_updated"),
                 json.dumps(product),
+            ),
+        )
+    db.commit()
+    db.close()
+
+
+def refresh_inventory_cache(path: str) -> None:
+    client = WineDirectClient.from_env()
+    inventory = client.fetch_inventory()
+    _update_rate_limit_status(path, client.rate_limit)
+
+    db = get_db(path)
+    db.execute("DELETE FROM inventory")
+    for row in inventory:
+        db.execute(
+            """
+            INSERT INTO inventory (sku, inventory_pool, inventory_pool_id, website_id, current_inventory, raw_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row.get("sku"),
+                row.get("inventory_pool"),
+                row.get("inventory_pool_id"),
+                row.get("website_id"),
+                row.get("current_inventory"),
+                json.dumps(row.get("raw_json", {}), default=str),
             ),
         )
     db.commit()

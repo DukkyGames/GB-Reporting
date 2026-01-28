@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block controls %}
+  <form class="date-form" method="get" action="{{ url_for('products_report') }}">
+    <label>
+      Range
+      <select name="range">
+        <option value="this_month" {% if range_key == "this_month" %}selected{% endif %}>This month</option>
+        <option value="last_month" {% if range_key == "last_month" %}selected{% endif %}>Last month</option>
+        <option value="last_3_months" {% if range_key == "last_3_months" %}selected{% endif %}>Last 3 months</option>
+        <option value="last_12_months" {% if range_key == "last_12_months" %}selected{% endif %}>Last 12 months</option>
+        <option value="ytd" {% if range_key == "ytd" %}selected{% endif %}>Year to date</option>
+        <option value="custom" {% if range_key == "custom" %}selected{% endif %}>Custom</option>
+      </select>
+    </label>
+    <label>
+      Start
+      <input type="date" name="start" value="{{ start_date }}" />
+    </label>
+    <label>
+      End
+      <input type="date" name="end" value="{{ end_date }}" />
+    </label>
+    <button type="submit" class="primary-btn">Update</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  {% if report.empty %}
+    <section class="panel">
+      <h2>No product sales data</h2>
+      <p>Refresh orders and items, then try a wider date range.</p>
+    </section>
+  {% else %}
+    <section class="report-grid">
+      <div class="report-main">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Sales Report by SKU</h2>
+            <p>{{ start_date }} to {{ end_date }}</p>
+          </div>
+          {% for sku in report.skus %}
+            <div class="sku-block">
+              <div class="sku-header">
+                <div>
+                  <div class="sku-label">SKU: {{ sku.sku }}</div>
+                  <div class="sku-name">{{ sku.name }}</div>
+                </div>
+                <div class="sku-total">
+                  <span>{{ "%.2f"|format(sku.total_cases) }} cases</span>
+                  <span>${{ "%.2f"|format(sku.total_sales) }}</span>
+                  <span>${{ "%.2f"|format(sku.avg_sale) }} avg</span>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Order Type</th>
+                      <th>Product SKU</th>
+                      <th>Product Name</th>
+                      <th>Cases Sold</th>
+                      <th>Net Sales</th>
+                      <th>Avg Sale</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in sku.rows %}
+                      <tr>
+                        <td>{{ row.order_type }}</td>
+                        <td>{{ row.sku }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ "%.2f"|format(row.cases_sold) }}</td>
+                        <td>${{ "%.2f"|format(row.net_sales) }}</td>
+                        <td>${{ "%.2f"|format(row.avg_sale) }}</td>
+                      </tr>
+                    {% endfor %}
+                    <tr class="total-row">
+                      <td colspan="3">TOTAL</td>
+                      <td>{{ "%.2f"|format(sku.total_cases) }}</td>
+                      <td>${{ "%.2f"|format(sku.total_sales) }}</td>
+                      <td>${{ "%.2f"|format(sku.avg_sale) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endfor %}
+        </section>
+      </div>
+      <aside class="report-side">
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Top Selling SKUs</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Cases</th>
+                  <th>Avg Sale</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in report.top_skus %}
+                  <tr>
+                    <td>{{ row['sku'] }}</td>
+                    <td>{{ "%.2f"|format(row['cases_sold']) }}</td>
+                    <td>${{ "%.2f"|format(row['avg_sale']) }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <h3>Inventory Available</h3>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Cases</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in report.inventory %}
+                  <tr>
+                    <td>{{ row['sku'] }}</td>
+                    <td>{{ "%.2f"|format(row['total_inventory']) }}</td>
+                  </tr>
+                {% else %}
+                  <tr>
+                    <td colspan="2">No inventory data.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </aside>
+    </section>
+  {% endif %}
+{% endblock %}

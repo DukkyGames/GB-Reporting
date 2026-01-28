@@ -51,9 +51,11 @@ class WineDirectClient:
         else:
             order_version = "V300"
         product_version = "V300"
+        inventory_version = "V300"
 
         self.order_wsdl = f"{base}/{order_version}/OrderService.cfc?wsdl"
         self.product_wsdl = f"{base}/{product_version}/ProductService.cfc?wsdl"
+        self.inventory_wsdl = f"{base}/{inventory_version}/InventoryService.cfc?wsdl"
 
         session = requests.Session()
         session.auth = HTTPBasicAuth(self.username, self.password)
@@ -62,6 +64,7 @@ class WineDirectClient:
         settings = Settings(strict=False, xml_huge_tree=True)
         self.order_client = Client(self.order_wsdl, transport=transport, settings=settings)
         self.product_client = Client(self.product_wsdl, transport=transport, settings=settings)
+        self.inventory_client = Client(self.inventory_wsdl, transport=transport, settings=settings)
 
     def _capture_rate_limit(self, response) -> None:
         headers = getattr(response, "headers", {}) or {}
@@ -255,6 +258,46 @@ class WineDirectClient:
             )
         return normalized
 
+    def fetch_inventory(self) -> List[Dict[str, Any]]:
+        inventory: List[Dict[str, Any]] = []
+        page = 1
+        max_rows = 100
+        filter_value = os.environ.get("WINE_INVENTORY_FILTER", "OnlySKUsWithInventoryOn")
+
+        while True:
+            response = self._search_inventory(page=page, max_rows=max_rows, filter_value=filter_value)
+            rows = self._extract_inventory(response)
+            inventory.extend(rows)
+
+            total_candidates = (
+                response.get("Total"),
+                response.get("TotalRows"),
+                response.get("RecordCount"),
+                response.get("TotalRecordCount"),
+            )
+            total = next((int(value) for value in total_candidates if value not in (None, "")), 0)
+            if not rows:
+                break
+            if total > 0 and len(inventory) >= total:
+                break
+            if total == 0 and len(rows) < max_rows:
+                break
+            page += 1
+
+        normalized = []
+        for row in inventory:
+            normalized.append(
+                {
+                    "sku": row.get("SKU") or row.get("Sku") or "",
+                    "inventory_pool": row.get("InventoryPool") or "",
+                    "inventory_pool_id": row.get("InventoryPoolID") or row.get("InventoryPoolId") or "",
+                    "website_id": row.get("WebsiteID") or row.get("WebsiteId") or "",
+                    "current_inventory": self._safe_float(row.get("CurrentInventory") or 0),
+                    "raw_json": row,
+                }
+            )
+        return normalized
+
     def _security(self) -> Dict[str, str]:
         return {"Username": self.username, "Password": self.password}
 
@@ -354,6 +397,28 @@ class WineDirectClient:
         if isinstance(products, dict):
             products = [products]
         return products or []
+
+    def _search_inventory(self, page: int = 1, max_rows: int = 100, filter_value: str = "OnlySKUsWithInventoryOn") -> Dict[str, Any]:
+        request = {
+            "Security": self._security(),
+            "MaxRows": max_rows,
+            "Page": page,
+            "Filter": filter_value,
+        }
+        website_ids = self._website_ids()
+        if website_ids:
+            request["WebsiteIDs"] = website_ids
+        result = self.inventory_client.service.SearchInventory(Request=request)
+        return serialize_object(result) or {}
+
+    @staticmethod
+    def _extract_inventory(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        inventory = response.get("Inventory") or []
+        if isinstance(inventory, dict) and "Inventory" in inventory:
+            inventory = inventory["Inventory"]
+        if isinstance(inventory, dict):
+            inventory = [inventory]
+        return inventory or []
 
     def _normalize_order(self, order: Dict[str, Any], detail: Dict[str, Any]) -> Dict[str, Any]:
         order_info = detail.get("Order") or detail.get("OrderDetail") or detail

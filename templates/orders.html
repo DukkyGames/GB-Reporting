@@ -21,7 +21,6 @@
         <thead>
           <tr>
             <th>Order #</th>
-            <th>Order ID</th>
             <th>Completed</th>
             <th>Customer</th>
             <th>Type</th>
@@ -33,9 +32,8 @@
           {% for order in orders %}
             <tr>
               <td><a href="{{ url_for('order_detail', order_id=order['order_id']) }}">{{ order['order_number'] }}</a></td>
-              <td class="mono">{{ order['order_id'] }}</td>
               <td>{{ order['completed_date'] }}</td>
-              <td class="mono">{{ order['customer_id'] }}</td>
+              <td class="mono">{{ order['bill_first_name'] }} {{ order['bill_last_name']}}</td>
               <td>{{ order['order_type'] }}</td>
               <td>{{ order['ship_state'] }}</td>
               <td>${{ "%.2f"|format(order['order_total'] or 0) }}</td>
