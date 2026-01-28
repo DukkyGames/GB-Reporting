@@ -1,0 +1,49 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grimm's Bluff Dashboard</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <img src="{{ url_for('static', filename='Logo.png') }}" alt="Grimm's Bluff logo" />
+      </div>
+      <div>
+        <h1>Grimm's Bluff Dashboard</h1>
+        <p>Because WineDirect sucks</p>
+      </div>
+    </div>
+    <div class="controls">
+      {% block controls %}{% endblock %}
+      <a class="ghost-btn" href="{{ url_for('orders') }}">Orders</a>
+      <a class="ghost-btn" href="{{ url_for('inventory') }}">Inventory</a>
+      <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
+    </div>
+  </header>
+
+  <main class="page">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-wrap">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>Grimm's Bluff Reporting</span>
+    <span>Powered by Grimmedia</span>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

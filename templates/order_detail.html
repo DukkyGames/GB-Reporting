@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Order {{ order['order_number'] }}</h2>
+      <p class="mono">{{ order['order_id'] }}</p>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-card">
+        <h3>Summary</h3>
+        <div class="detail-row"><span>Type</span><span>{{ order['order_type'] }}</span></div>
+        <div class="detail-row"><span>Status</span><span>{{ order['order_status'] if 'order_status' in order.keys() else '' }}</span></div>
+        <div class="detail-row"><span>Completed</span><span>{{ order['completed_date'] }}</span></div>
+        <div class="detail-row"><span>Submitted</span><span>{{ order['submitted_date'] }}</span></div>
+        <div class="detail-row"><span>Modified</span><span>{{ order['date_modified'] }}</span></div>
+        <div class="detail-row"><span>Pickup</span><span>{{ 'Yes' if order['pickup'] else 'No' }}</span></div>
+        <div class="detail-row"><span>Pickup Date</span><span>{{ order['pickup_date'] }}</span></div>
+        <div class="detail-row"><span>Pickup Location</span><span>{{ order['pickup_location_code'] }}</span></div>
+      </div>
+      <div class="detail-card">
+        <h3>Billing</h3>
+        <div class="detail-row"><span>Name</span><span>{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}</span></div>
+        <div class="detail-row"><span>Contact</span><span class="mono">{{ order['customer_id'] }}</span></div>
+        <div class="detail-row"><span>Email</span><span>{{ order['bill_email'] }}</span></div>
+        <div class="detail-row"><span>Phone</span><span>{{ order['bill_phone'] }}</span></div>
+        <div class="detail-row"><span>Address</span><span>{{ order['bill_address'] }}</span></div>
+        <div class="detail-row"><span>Address 2</span><span>{{ order['bill_address2'] }}</span></div>
+        <div class="detail-row"><span>City/State</span><span>{{ order['bill_city'] }}, {{ order['bill_state'] }}</span></div>
+        <div class="detail-row"><span>Zip/Country</span><span>{{ order['bill_zip'] }} {{ order['bill_country'] }}</span></div>
+      </div>
+      <div class="detail-card">
+        <h3>Shipping</h3>
+        <div class="detail-row"><span>Name</span><span>{{ order['ship_first_name'] }} {{ order['ship_last_name'] }}</span></div>
+        <div class="detail-row"><span>Email</span><span>{{ order['ship_email'] }}</span></div>
+        <div class="detail-row"><span>Phone</span><span>{{ order['ship_phone'] }}</span></div>
+        <div class="detail-row"><span>Address</span><span>{{ order['ship_address'] }}</span></div>
+        <div class="detail-row"><span>Address 2</span><span>{{ order['ship_address2'] }}</span></div>
+        <div class="detail-row"><span>City/State</span><span>{{ order['ship_city'] }}, {{ order['ship_state_code'] }}</span></div>
+        <div class="detail-row"><span>Zip/Country</span><span>{{ order['ship_zip'] }} {{ order['ship_country'] }}</span></div>
+        <div class="detail-row"><span>Shipping Status</span><span>{{ order['shipping_status'] }}</span></div>
+        <div class="detail-row"><span>Tracking</span><span>{{ order['tracking_number'] }}</span></div>
+      </div>
+      <div class="detail-card">
+        <h3>Totals</h3>
+        <div class="detail-row"><span>Subtotal</span><span>${{ "%.2f"|format(order['sub_total'] or 0) }}</span></div>
+        <div class="detail-row"><span>Tax</span><span>${{ "%.2f"|format(order['taxes'] or 0) }}</span></div>
+        <div class="detail-row"><span>Shipping</span><span>${{ "%.2f"|format(order['shipping'] or 0) }}</span></div>
+        <div class="detail-row"><span>Tip</span><span>${{ "%.2f"|format(order['tip'] or 0) }}</span></div>
+        <div class="detail-row"><span>Total</span><span>${{ "%.2f"|format(order['total'] or 0) }}</span></div>
+        <div class="detail-row"><span>Net Sales</span><span>${{ "%.2f"|format(order['net_sales'] or 0) }}</span></div>
+        <div class="detail-row"><span>Units</span><span>{{ order['units'] }}</span></div>
+        <div class="detail-row"><span>Payment Status</span><span>{{ order['payment_status'] }}</span></div>
+        <div class="detail-row"><span>Payment Terms</span><span>{{ order['payment_terms'] }}</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-head">
+      <h3>Items</h3>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Title</th>
+            <th>Type</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Original</th>
+            <th>Sales Tax</th>
+            <th>Department</th>
+            <th>Inventory Pool</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr>
+              <td>{{ item['sku'] }}</td>
+              <td>{{ item['title'] or item['product_name'] }}</td>
+              <td>{{ item['item_type'] }}</td>
+              <td>{{ item['quantity'] }}</td>
+              <td>${{ "%.2f"|format(item['price'] or 0) }}</td>
+              <td>${{ "%.2f"|format(item['original_price'] or 0) }}</td>
+              <td>${{ "%.2f"|format(item['sales_tax'] or 0) }}</td>
+              <td>{{ item['department'] }}</td>
+              <td>{{ item['inventory_pool'] }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9">No items found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if raw_pretty %}
+    <section class="panel">
+      <div class="panel-head">
+        <h3>Raw Order Detail</h3>
+        <p>Full payload captured from WineDirect.</p>
+      </div>
+      <pre class="code-block">{{ raw_pretty }}</pre>
+    </section>
+  {% endif %}
+{% endblock %}

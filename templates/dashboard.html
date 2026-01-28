@@ -1,0 +1,327 @@
+﻿{% extends "base.html" %}
+
+{% block controls %}
+  <form class="date-form" method="get" action="{{ url_for('dashboard') }}">
+    <label>
+      Range
+      <select name="range">
+        <option value="this_month" {% if range_key == "this_month" %}selected{% endif %}>This month</option>
+        <option value="last_month" {% if range_key == "last_month" %}selected{% endif %}>Last month</option>
+        <option value="last_3_months" {% if range_key == "last_3_months" %}selected{% endif %}>Last 3 months</option>
+        <option value="last_12_months" {% if range_key == "last_12_months" %}selected{% endif %}>Last 12 months</option>
+        <option value="ytd" {% if range_key == "ytd" %}selected{% endif %}>Year to date</option>
+        <option value="custom" {% if range_key == "custom" %}selected{% endif %}>Custom</option>
+      </select>
+    </label>
+    <label>
+      Start
+      <input type="date" name="start" value="{{ start_date }}" />
+    </label>
+    <label>
+      End
+      <input type="date" name="end" value="{{ end_date }}" />
+    </label>
+    <button type="submit" class="primary-btn">Update</button>
+  </form>
+  <div class="control-group">
+    <a class="ghost-btn" href="{{ url_for('export_pdf_route', start=start_date, end=end_date) }}">Export PDF</a>
+    <a class="ghost-btn" href="{{ url_for('export_excel_route', start=start_date, end=end_date) }}">Export Excel</a>
+    <form method="post" action="{{ url_for('refresh_cache') }}" class="inline-form">
+      <label class="refresh-option">
+        <input type="checkbox" name="include_products" value="1" />
+        Products
+      </label>
+      <button type="submit" class="ghost-btn">Refresh Cache</button>
+    </form>
+    <form method="post" action="{{ url_for('rate_check') }}" class="inline-form">
+      <button type="submit" class="ghost-btn">Rate Check</button>
+    </form>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <section class="panel status-panel">
+    <div class="panel-head">
+      <h2>Cache Status</h2>
+      <p>Track refresh progress and cached totals.</p>
+    </div>
+    <div class="status-grid">
+      <div class="status-item">
+        <span class="status-label">Refresh State</span>
+        <span class="status-value" data-cache-status="state">
+          {% if cache_status.in_progress %}In progress{% else %}Idle{% endif %}
+        </span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Last Result</span>
+        <span class="status-value" data-cache-status="result">{{ cache_status.result }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Last Started</span>
+        <span class="status-value" data-cache-status="started_at">{{ cache_status.started_at }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Last Finished</span>
+        <span class="status-value" data-cache-status="finished_at">{{ cache_status.finished_at }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Latest Order Date</span>
+        <span class="status-value" data-cache-status="latest_order_date">{{ cache_status.latest_order_date or "—" }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Orders Cached</span>
+        <span class="status-value" data-cache-status="orders_count">{{ cache_status.orders_count }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Items Cached</span>
+        <span class="status-value" data-cache-status="items_count">{{ cache_status.items_count }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Products Cached</span>
+        <span class="status-value" data-cache-status="products_count">{{ cache_status.products_count }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Rate Limit</span>
+        <span class="status-value" data-cache-status="rate_limit_limit">{{ cache_status.rate_limit_limit }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Rate Limit Remaining</span>
+        <span class="status-value" data-cache-status="rate_limit_remaining">{{ cache_status.rate_limit_remaining }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Rate Limit Reset</span>
+        <span class="status-value" data-cache-status="rate_limit_reset_at">{{ cache_status.rate_limit_reset_at }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Refresh Page</span>
+        <span class="status-value" data-cache-status="refresh_page">{{ cache_status.refresh_page }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Orders Fetched</span>
+        <span class="status-value" data-cache-status="refresh_fetched">{{ cache_status.refresh_fetched }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">Total Orders</span>
+        <span class="status-value" data-cache-status="refresh_total">{{ cache_status.refresh_total }}</span>
+      </div>
+      <div class="status-item status-progress">
+        <span class="status-label">Progress</span>
+        <div class="progress-bar">
+          <div class="progress-fill" data-cache-status="refresh_progress"></div>
+        </div>
+        <span class="status-value" data-cache-status="refresh_progress_label">—</span>
+      </div>
+      {% if cache_status.last_error %}
+        <div class="status-item status-error" data-cache-status="error_block">
+          <span class="status-label">Last Error</span>
+          <span class="status-value" data-cache-status="last_error">{{ cache_status.last_error }}</span>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if report.empty %}
+    <section class="panel">
+      <h2>No data available</h2>
+      <p>Use the date selector above or run a cache refresh.</p>
+    </section>
+  {% else %}
+    <section class="panel kpi-panel">
+      <div class="panel-head">
+        <h2>Financial Snapshot</h2>
+        <p>Core KPIs generated from WineDirect orders</p>
+      </div>
+      <div class="kpi-grid">
+        {% for label, value in report.kpis %}
+          <div class="kpi-tile">
+            <div>
+              <div class="kpi-value">{{ value }}</div>
+              <div class="kpi-label">{{ label }}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Monthly Net Sales</h3>
+          <p>Trend of net sales across the year</p>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.monthly_net_sales }}" alt="Monthly net sales" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Orders & Units</h3>
+          <p>Orders (bars) and units (line) each month</p>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.orders_units }}" alt="Orders and units" />
+      </div>
+    </section>
+
+    <section class="grid three-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Products by Revenue</h3>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_products_revenue }}" alt="Top products by revenue" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top Products by Units</h3>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_products_units }}" alt="Top products by units" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Customer Mix</h3>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.customer_mix }}" alt="Customer mix" />
+      </div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Sales by Channel</h3>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.sales_by_channel }}" alt="Sales by channel" />
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Top States (Shipped Orders)</h3>
+        </div>
+        <img class="chart-img" src="data:image/png;base64,{{ report.charts.top_states }}" alt="Top states" />
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h3>Monthly Summary</h3>
+        <p>Net sales, orders, and units by month</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Net Sales</th>
+              <th>Orders</th>
+              <th>Units</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in report.table %}
+              <tr>
+                <td>{{ row.month }}</td>
+                <td>{{ row.net_sales }}</td>
+                <td>{{ row.orders }}</td>
+                <td>{{ row.units }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const statusFields = document.querySelectorAll("[data-cache-status]");
+  const statusMap = {};
+  for (const field of statusFields) {
+    const key = field.getAttribute("data-cache-status");
+    if (!statusMap[key]) {
+      statusMap[key] = [];
+    }
+    statusMap[key].push(field);
+  }
+
+  async function refreshCacheStatus() {
+    try {
+      const response = await fetch("{{ url_for('cache_status') }}", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const data = await response.json();
+      const stateText = data.in_progress ? "In progress" : "Idle";
+      const updates = {
+        state: stateText,
+        result: data.result || "—",
+        started_at: data.started_at || "—",
+        finished_at: data.finished_at || "—",
+        latest_order_date: data.latest_order_date || "—",
+        orders_count: data.orders_count || "0",
+        items_count: data.items_count || "0",
+        products_count: data.products_count || "0",
+        rate_limit_limit: data.rate_limit_limit || "—",
+        rate_limit_remaining: data.rate_limit_remaining || "—",
+        rate_limit_reset_at: data.rate_limit_reset_at || "—",
+        refresh_page: data.refresh_page || "0",
+        refresh_fetched: data.refresh_fetched || "0",
+        refresh_total: data.refresh_total || "0",
+        last_error: data.last_error || ""
+      };
+
+      for (const [key, value] of Object.entries(updates)) {
+        if (!statusMap[key]) {
+          continue;
+        }
+        for (const node of statusMap[key]) {
+          node.textContent = value;
+        }
+      }
+
+      const fetched = Number.parseInt(data.refresh_fetched || "0", 10);
+      const total = Number.parseInt(data.refresh_total || "0", 10);
+      if (statusMap.refresh_progress) {
+        const fill = statusMap.refresh_progress[0];
+        if (total > 0) {
+          const pct = Math.min(Math.round((fetched / total) * 100), 100);
+          fill.style.width = `${pct}%`;
+          if (statusMap.refresh_progress_label) {
+            for (const node of statusMap.refresh_progress_label) {
+              node.textContent = `${pct}%`;
+            }
+          }
+        } else {
+          fill.style.width = fetched > 0 ? "30%" : "0%";
+          if (statusMap.refresh_progress_label) {
+            for (const node of statusMap.refresh_progress_label) {
+              node.textContent = fetched > 0 ? `${fetched} fetched` : "—";
+            }
+          }
+        }
+      }
+
+      if (data.last_error) {
+        if (!statusMap.error_block) {
+          const grid = document.querySelector(".status-grid");
+          if (grid) {
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "status-item status-error";
+            errorDiv.setAttribute("data-cache-status", "error_block");
+            errorDiv.innerHTML = `
+              <span class="status-label">Last Error</span>
+              <span class="status-value" data-cache-status="last_error"></span>
+            `;
+            grid.appendChild(errorDiv);
+            statusMap.error_block = [errorDiv];
+            statusMap.last_error = Array.from(errorDiv.querySelectorAll("[data-cache-status='last_error']"));
+            for (const node of statusMap.last_error) {
+              node.textContent = data.last_error;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Silent fail to avoid UI noise on transient network issues.
+    }
+  }
+
+  refreshCacheStatus();
+  setInterval(refreshCacheStatus, 15000);
+</script>
+{% endblock %}
