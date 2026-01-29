@@ -95,8 +95,30 @@ def _build_report_core(db_path: str, start_date: date, end_date: date) -> dict:
     channel = orders.groupby("order_type").agg(net_sales=("sub_total", "sum")).reset_index()
     channel = channel[channel["net_sales"] > 0].sort_values("net_sales", ascending=False)
 
-    top_rev = items.groupby(["sku", "product_name"]).agg(net_sales=("net_sales", "sum")).reset_index()
-    top_rev = top_rev.sort_values("net_sales", ascending=False).head(10)
+    # Allocate order-level net sales to items to avoid relying on item net_sales.
+    items_alloc = items.merge(orders[["order_id", "sub_total"]], on="order_id", how="left")
+    items_alloc["quantity"] = pd.to_numeric(items_alloc.get("quantity", 0), errors="coerce").fillna(0)
+    items_alloc["price"] = pd.to_numeric(items_alloc.get("price", 0), errors="coerce").fillna(0)
+    items_alloc["order_net_sales"] = pd.to_numeric(items_alloc.get("sub_total", 0), errors="coerce").fillna(0)
+    items_alloc["line_value"] = items_alloc["price"] * items_alloc["quantity"]
+    value_by_order = items_alloc.groupby("order_id")["line_value"].transform("sum")
+    qty_by_order = items_alloc.groupby("order_id")["quantity"].transform("sum")
+    items_alloc["calc_sales"] = 0.0
+    has_value = value_by_order > 0
+    items_alloc.loc[has_value, "calc_sales"] = (
+        items_alloc.loc[has_value, "order_net_sales"] * (items_alloc.loc[has_value, "line_value"] / value_by_order[has_value])
+    )
+    has_qty = (~has_value) & (qty_by_order > 0)
+    items_alloc.loc[has_qty, "calc_sales"] = (
+        items_alloc.loc[has_qty, "order_net_sales"] * (items_alloc.loc[has_qty, "quantity"] / qty_by_order[has_qty])
+    )
+    top_rev = (
+        items_alloc.groupby(["sku", "product_name"])
+        .agg(net_sales=("calc_sales", "sum"))
+        .reset_index()
+        .sort_values("net_sales", ascending=False)
+        .head(10)
+    )
 
     top_units = items.groupby(["sku", "product_name"]).agg(units=("quantity", "sum")).reset_index()
     top_units = top_units.sort_values("units", ascending=False).head(10)
