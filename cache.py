@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -388,15 +388,24 @@ def ensure_admin_user(path: str) -> None:
 
 def refresh_orders_cache(path: str, start_date: date, end_date: date) -> None:
     client = WineDirectClient.from_env()
-    def _progress(page: int, fetched: int, total: int) -> None:
-        set_cache_status(
-            path,
-            refresh_page=str(page),
-            refresh_fetched=str(fetched),
-            refresh_total=str(total),
-        )
 
-    set_cache_status(path, refresh_page="0", refresh_fetched="0", refresh_total="0")
+    def _progress(page: int | None, fetched: int, total: int) -> None:
+        if page is not None:
+            set_cache_status(
+                path,
+                refresh_page=str(page),
+                refresh_fetched=str(fetched),
+                refresh_total=str(total),
+            )
+        else:
+            # Detail fetch phase
+            set_cache_status(
+                path,
+                refresh_detail_current=str(fetched),
+                refresh_detail_total=str(total),
+            )
+
+    set_cache_status(path, refresh_page="0", refresh_fetched="0", refresh_total="0", refresh_detail_current="", refresh_detail_total="")
     orders = client.fetch_orders(start_date, end_date, progress_cb=_progress)
     _update_rate_limit_status(path, client.rate_limit)
 

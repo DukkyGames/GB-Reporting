@@ -103,6 +103,10 @@
         <span class="status-label">Total Orders</span>
         <span class="status-value" data-cache-status="refresh_total">{{ cache_status.refresh_total }}</span>
       </div>
+      <div class="status-item">
+        <span class="status-label">Detail Progress</span>
+        <span class="status-value" data-cache-status="detail_progress">—</span>
+      </div>
       <div class="status-item status-progress">
         <span class="status-label">Progress</span>
         <div class="progress-bar">
@@ -165,7 +169,10 @@
         refresh_page: data.refresh_page || "0",
         refresh_fetched: data.refresh_fetched || "0",
         refresh_total: data.refresh_total || "0",
-        last_error: data.last_error || ""
+        last_error: data.last_error || "",
+        detail_progress: (data.refresh_detail_current && data.refresh_detail_total)
+          ? `${data.refresh_detail_current} / ${data.refresh_detail_total}`
+          : "—"
       };
 
       for (const [key, value] of Object.entries(updates)) {

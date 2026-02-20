@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -177,6 +177,8 @@ def _build_cache_status() -> dict:
         "refresh_page": status.get("refresh_page") or "0",
         "refresh_fetched": status.get("refresh_fetched") or "0",
         "refresh_total": status.get("refresh_total") or "0",
+        "refresh_detail_current": status.get("refresh_detail_current") or "",
+        "refresh_detail_total": status.get("refresh_detail_total") or "",
     }
 
 

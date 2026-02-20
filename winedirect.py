@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import time
@@ -118,18 +118,23 @@ class WineDirectClient:
             except ValueError:
                 return
             if wait_on_rate_limit:
-                while True:
+                # Sleep until rate limit resets. Do NOT call rate_limit_check() here –
+                # that burns another request and makes the situation worse.
+                reset_epoch = self.rate_limit.get("reset")
+                if reset_epoch:
                     try:
-                        self.rate_limit_check()
-                    except Exception:
+                        reset_sec = int(reset_epoch)
+                        if reset_sec > 2_000_000_000_000:  # milliseconds
+                            reset_sec = reset_sec // 1000
+                        if reset_sec > 0:
+                            wait_sec = max(1, reset_sec - int(time.time()))
+                            if wait_sec > 0 and wait_sec < 3600:  # cap at 1 hour
+                                time.sleep(wait_sec)
+                                return  # Retry after sleep; headers will update on next request
+                    except (ValueError, OSError):
                         pass
-                    new_remaining = self.rate_limit.get("remaining")
-                    try:
-                        if new_remaining is not None and int(new_remaining) > 0:
-                            break
-                    except ValueError:
-                        pass
-                    time.sleep(rate_check_interval)
+                # Fallback: sleep a conservative interval
+                time.sleep(60)
             else:
                 raise RuntimeError("Rate limit exhausted before next page request.")
         while True:
@@ -174,6 +179,8 @@ class WineDirectClient:
             page += 1
 
         if fetch_detail:
+            total_details = len(detail_queue)
+            detail_progress_interval = max(1, total_details // 50)  # Update ~50 times
             for idx, order_id, order_number in detail_queue:
                 if max_detail is not None and detail_count >= max_detail:
                     break
@@ -185,6 +192,11 @@ class WineDirectClient:
                     continue
                 orders[idx] = self._normalize_order(raw_orders[idx], detail)
                 detail_count += 1
+                if progress_cb is not None and (detail_count % detail_progress_interval == 0 or detail_count == total_details):
+                    try:
+                        progress_cb(None, detail_count, total_details)  # page=None signals detail phase
+                    except Exception:
+                        pass
         return orders
 
     def fetch_orders_chunked(self, start_date: date, end_date: date, chunk_days: int = 30) -> List[Dict[str, Any]]:
@@ -335,7 +347,9 @@ class WineDirectClient:
     def _get_order_detail(self, order_id: str, order_number: float | None) -> Dict[str, Any]:
         attempts: List[Dict[str, Any]] = []
         if order_number is not None:
-            attempts.append({"OrderNumber": order_number})
+            # Some APIs expect int; send whole numbers as int to avoid "13126.0"
+            num_val = int(order_number) if isinstance(order_number, float) and order_number == int(order_number) else order_number
+            attempts.append({"OrderNumber": num_val})
         if order_id:
             attempts.append({"OrderID": order_id})
 
