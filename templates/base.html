@@ -217,6 +217,7 @@
 
         loadSaved();
         form.querySelectorAll("input, select").forEach((field) => {
+          if (field.closest("[data-no-autosubmit]")) return;
           field.addEventListener("change", submitForm);
           if (field.type !== "date") {
             field.addEventListener("input", () => {

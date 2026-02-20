@@ -317,19 +317,6 @@ body {
   margin: 0;
 }
 
-.pool-filters {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-  align-items: center;
-}
-
-.pool-filters .filter-label {
-  font-size: 0.8rem;
-  color: var(--ink);
-  margin-right: 4px;
-}
-
 .panel {
   background: var(--surface);
   border-radius: 18px;

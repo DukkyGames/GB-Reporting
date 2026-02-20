@@ -26,20 +26,24 @@
       <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} />
       Hide Zero
     </label>
-    <div class="pool-filters">
-      <span class="filter-label">Filter</span>
-      <label class="inline-check">
-        <input type="checkbox" name="pool_barn" value="1" {% if "barn" in pool_filters %}checked{% endif %} />
-        Barn
-      </label>
-      <label class="inline-check">
-        <input type="checkbox" name="pool_warehouse" value="1" {% if "warehouse" in pool_filters %}checked{% endif %} />
-        Warehouse
-      </label>
-      <label class="inline-check">
-        <input type="checkbox" name="pool_library" value="1" {% if "library" in pool_filters %}checked{% endif %} />
-        Library
-      </label>
+    <div class="multi-select pool-filter-dropdown" data-dropdown data-no-autosubmit>
+      <button type="button" class="ghost-btn" data-dropdown-trigger>Filter Pools</button>
+      <div class="multi-select-menu" data-dropdown-menu>
+        <div class="multi-select-options">
+          <label>
+            <input type="checkbox" name="pool_barn" value="1" {% if "barn" in pool_filters %}checked{% endif %} />
+            Barn
+          </label>
+          <label>
+            <input type="checkbox" name="pool_warehouse" value="1" {% if "warehouse" in pool_filters %}checked{% endif %} />
+            Warehouse
+          </label>
+          <label>
+            <input type="checkbox" name="pool_library" value="1" {% if "library" in pool_filters %}checked{% endif %} />
+            Library
+          </label>
+        </div>
+      </div>
     </div>
     <a class="ghost-btn" href="{{ url_for('inventory') }}">Reset</a>
   </form>
@@ -82,4 +86,29 @@
       </table>
     </div>
   </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const dropdown = document.querySelector(".pool-filter-dropdown[data-dropdown]");
+    if (dropdown) {
+      const trigger = dropdown.querySelector("[data-dropdown-trigger]");
+      const menu = dropdown.querySelector("[data-dropdown-menu]");
+      const form = dropdown.closest("form");
+
+      trigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        menu.classList.toggle("open");
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!dropdown.contains(event.target) && menu.classList.contains("open")) {
+          menu.classList.remove("open");
+          if (form) form.requestSubmit();
+        }
+      });
+    }
+  })();
+</script>
 {% endblock %}
