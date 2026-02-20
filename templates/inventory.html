@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block controls %}
   <form class="filter-form" method="get" action="{{ url_for('inventory') }}" data-autosubmit>
@@ -26,18 +26,21 @@
       <input type="checkbox" name="hide_zero" value="1" {% if hide_zero %}checked{% endif %} />
       Hide Zero
     </label>
-    <label class="inline-check">
-      <input type="checkbox" name="only_barn" value="1" {% if only_barn %}checked{% endif %} />
-      Barn Only
-    </label>
-    <label class="inline-check">
-      <input type="checkbox" name="only_warehouse" value="1" {% if only_warehouse %}checked{% endif %} />
-      Warehouse Only
-    </label>
-    <label class="inline-check">
-      <input type="checkbox" name="only_library" value="1" {% if only_library %}checked{% endif %} />
-      Library Only
-    </label>
+    <div class="pool-filters">
+      <span class="filter-label">Filter</span>
+      <label class="inline-check">
+        <input type="checkbox" name="pool_barn" value="1" {% if "barn" in pool_filters %}checked{% endif %} />
+        Barn
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" name="pool_warehouse" value="1" {% if "warehouse" in pool_filters %}checked{% endif %} />
+        Warehouse
+      </label>
+      <label class="inline-check">
+        <input type="checkbox" name="pool_library" value="1" {% if "library" in pool_filters %}checked{% endif %} />
+        Library
+      </label>
+    </div>
     <a class="ghost-btn" href="{{ url_for('inventory') }}">Reset</a>
   </form>
 {% endblock %}

@@ -190,6 +190,8 @@ def _apply_range_key(range_key: str, start_date: date | None, end_date: date | N
         first_this_month = date(today.year, today.month, 1)
         prev_month_last = first_this_month - timedelta(days=1)
         return date(prev_month_last.year, prev_month_last.month, 1), prev_month_last
+    if range_key == "last_week":
+        return today - timedelta(days=6), today
     if range_key == "last_year":
         return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
     if range_key == "last_3_months":
@@ -424,9 +426,7 @@ def _build_inventory_view(
     min_barn: float,
     min_warehouse: float,
     min_library: float,
-    only_barn: bool,
-    only_warehouse: bool,
-    only_library: bool,
+    pool_filters: list[str],
 ) -> list[dict]:
     db = get_db(DB_PATH)
     rows = db.execute(
@@ -473,7 +473,6 @@ def _build_inventory_view(
     unit_divisor = per_case if unit == "case" else 1
 
     filtered = []
-    any_only = only_barn or only_warehouse or only_library
     for row in inventory:
         total = row.get("total", 0) / unit_divisor
         barn = row.get("barn", 0) / unit_divisor
@@ -492,15 +491,15 @@ def _build_inventory_view(
             continue
         if library < min_library:
             continue
-        if any_only:
-            matches_pool = False
-            if only_barn and barn > 0:
-                matches_pool = True
-            if only_warehouse and warehouse > 0:
-                matches_pool = True
-            if only_library and library > 0:
-                matches_pool = True
-            if not matches_pool:
+        if pool_filters:
+            matches = False
+            if "barn" in pool_filters and barn > 0:
+                matches = True
+            if "warehouse" in pool_filters and warehouse > 0:
+                matches = True
+            if "library" in pool_filters and library > 0:
+                matches = True
+            if not matches:
                 continue
         display_row = dict(row)
         display_row["total"] = total
@@ -564,6 +563,9 @@ def dashboard():
         prev_month_last = first_this_month - timedelta(days=1)
         start_date = date(prev_month_last.year, prev_month_last.month, 1)
         end_date = prev_month_last
+    elif range_key == "last_week":
+        start_date = today - timedelta(days=6)
+        end_date = today
     elif range_key == "last_year":
         start_date = date(today.year - 1, 1, 1)
         end_date = date(today.year - 1, 12, 31)
@@ -724,6 +726,9 @@ def products_report():
         prev_month_last = first_this_month - timedelta(days=1)
         start_date = date(prev_month_last.year, prev_month_last.month, 1)
         end_date = prev_month_last
+    elif range_key == "last_week":
+        start_date = today - timedelta(days=6)
+        end_date = today
     elif range_key == "last_3_months":
         start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
         end_date = today
@@ -759,9 +764,13 @@ def inventory():
     min_barn = float(request.args.get("min_barn", "0") or 0)
     min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
     min_library = float(request.args.get("min_library", "0") or 0)
-    only_barn = request.args.get("only_barn", "0") == "1"
-    only_warehouse = request.args.get("only_warehouse", "0") == "1"
-    only_library = request.args.get("only_library", "0") == "1"
+    pool_filters = []
+    if request.args.get("pool_barn", "0") == "1":
+        pool_filters.append("barn")
+    if request.args.get("pool_warehouse", "0") == "1":
+        pool_filters.append("warehouse")
+    if request.args.get("pool_library", "0") == "1":
+        pool_filters.append("library")
     unit = request.args.get("unit", "bottle")
     filtered = _build_inventory_view(
         unit=unit,
@@ -771,10 +780,12 @@ def inventory():
         min_barn=min_barn,
         min_warehouse=min_warehouse,
         min_library=min_library,
-        only_barn=only_barn,
-        only_warehouse=only_warehouse,
-        only_library=only_library,
+        pool_filters=pool_filters,
     )
+
+    show_barn = not pool_filters or "barn" in pool_filters
+    show_warehouse = not pool_filters or "warehouse" in pool_filters
+    show_library = not pool_filters or "library" in pool_filters
 
     return render_template(
         "inventory.html",
@@ -785,12 +796,10 @@ def inventory():
         min_barn=min_barn,
         min_warehouse=min_warehouse,
         min_library=min_library,
-        only_barn=only_barn,
-        only_warehouse=only_warehouse,
-        only_library=only_library,
-        show_barn=not (only_warehouse or only_library),
-        show_warehouse=not (only_barn or only_library),
-        show_library=not (only_barn or only_warehouse),
+        pool_filters=pool_filters,
+        show_barn=show_barn,
+        show_warehouse=show_warehouse,
+        show_library=show_library,
         unit=unit,
     )
 
@@ -896,7 +905,7 @@ def orders():
     max_total = request.args.get("max_total", "").strip()
 
     start_date, end_date = _apply_range_key(range_key, start_date, end_date)
-    if range_key not in {"this_month", "last_month", "last_year", "last_3_months", "last_12_months", "ytd", "custom"}:
+    if range_key not in {"this_month", "last_month", "last_week", "last_year", "last_3_months", "last_12_months", "ytd", "custom"}:
         range_key = "custom"
 
     if start_date and end_date and start_date > end_date:
@@ -1180,9 +1189,13 @@ def export_current_excel(export_endpoint: str):
         min_barn = float(request.args.get("min_barn", "0") or 0)
         min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
         min_library = float(request.args.get("min_library", "0") or 0)
-        only_barn = request.args.get("only_barn", "0") == "1"
-        only_warehouse = request.args.get("only_warehouse", "0") == "1"
-        only_library = request.args.get("only_library", "0") == "1"
+        pool_filters = []
+        if request.args.get("pool_barn", "0") == "1":
+            pool_filters.append("barn")
+        if request.args.get("pool_warehouse", "0") == "1":
+            pool_filters.append("warehouse")
+        if request.args.get("pool_library", "0") == "1":
+            pool_filters.append("library")
         unit = request.args.get("unit", "bottle")
         rows = _build_inventory_view(
             unit=unit,
@@ -1192,9 +1205,7 @@ def export_current_excel(export_endpoint: str):
             min_barn=min_barn,
             min_warehouse=min_warehouse,
             min_library=min_library,
-            only_barn=only_barn,
-            only_warehouse=only_warehouse,
-            only_library=only_library,
+            pool_filters=pool_filters,
         )
         buffer = export_inventory_excel(rows, unit=unit)
         filename = f"grimms_bluff_inventory_{_report_today().isoformat()}.xlsx"
@@ -1364,9 +1375,13 @@ def export_current_pdf(export_endpoint: str):
         min_barn = float(request.args.get("min_barn", "0") or 0)
         min_warehouse = float(request.args.get("min_warehouse", "0") or 0)
         min_library = float(request.args.get("min_library", "0") or 0)
-        only_barn = request.args.get("only_barn", "0") == "1"
-        only_warehouse = request.args.get("only_warehouse", "0") == "1"
-        only_library = request.args.get("only_library", "0") == "1"
+        pool_filters = []
+        if request.args.get("pool_barn", "0") == "1":
+            pool_filters.append("barn")
+        if request.args.get("pool_warehouse", "0") == "1":
+            pool_filters.append("warehouse")
+        if request.args.get("pool_library", "0") == "1":
+            pool_filters.append("library")
         unit = request.args.get("unit", "bottle")
         rows = _build_inventory_view(
             unit=unit,
@@ -1376,9 +1391,7 @@ def export_current_pdf(export_endpoint: str):
             min_barn=min_barn,
             min_warehouse=min_warehouse,
             min_library=min_library,
-            only_barn=only_barn,
-            only_warehouse=only_warehouse,
-            only_library=only_library,
+            pool_filters=pool_filters,
         )
         buffer = export_inventory_pdf(rows, unit=unit)
         filename = f"grimms_bluff_inventory_{_report_today().isoformat()}.pdf"

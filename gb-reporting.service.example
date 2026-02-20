@@ -1,0 +1,18 @@
+[Unit]
+Description=GB-Reporting (Grimm's Bluff)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/gb-reporting/GB-Reporting
+Environment="PATH=/opt/gb-reporting/GB-Reporting/.venv/bin"
+# Load .env from working directory
+EnvironmentFile=/opt/gb-reporting/GB-Reporting/.env
+ExecStart=/opt/gb-reporting/GB-Reporting/.venv/bin/gunicorn -c gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

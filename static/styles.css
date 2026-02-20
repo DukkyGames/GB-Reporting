@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --ink: #12303a;
   --muted: #5e6c74;
   --teal: #0f8da0;
@@ -315,6 +315,19 @@ body {
 
 .inline-check input {
   margin: 0;
+}
+
+.pool-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+}
+
+.pool-filters .filter-label {
+  font-size: 0.8rem;
+  color: var(--ink);
+  margin-right: 4px;
 }
 
 .panel {

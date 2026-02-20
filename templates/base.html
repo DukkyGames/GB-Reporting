@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -44,6 +44,7 @@
         <select name="range">
           <option value="this_month" {% if current_range == "this_month" %}selected{% endif %}>This month</option>
           <option value="last_month" {% if current_range == "last_month" %}selected{% endif %}>Last month</option>
+          <option value="last_week" {% if current_range == "last_week" %}selected{% endif %}>Last week</option>
           <option value="last_year" {% if current_range == "last_year" %}selected{% endif %}>Last year</option>
           <option value="last_3_months" {% if current_range == "last_3_months" %}selected{% endif %}>Last 3 months</option>
           <option value="last_12_months" {% if current_range == "last_12_months" %}selected{% endif %}>Last 12 months</option>
@@ -217,16 +218,18 @@
         loadSaved();
         form.querySelectorAll("input, select").forEach((field) => {
           field.addEventListener("change", submitForm);
-          field.addEventListener("input", () => {
-            if (timer) {
-              clearTimeout(timer);
-            }
-            timer = setTimeout(() => {
-              saveCurrent();
-              window.sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
-              form.requestSubmit();
-            }, 400);
-          });
+          if (field.type !== "date") {
+            field.addEventListener("input", () => {
+              if (timer) {
+                clearTimeout(timer);
+              }
+              timer = setTimeout(() => {
+                saveCurrent();
+                window.sessionStorage.setItem(scrollKey, String(window.scrollY || 0));
+                form.requestSubmit();
+              }, 400);
+            });
+          }
         });
         [startInput, endInput].forEach((field) => {
           if (!field || !rangeSelect) return;
