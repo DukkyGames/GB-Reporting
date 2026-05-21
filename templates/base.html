@@ -3,11 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Grimm's Bluff Dashboard</title>
+  <title>{% block title %}Grimm's Bluff{% endblock %} · Reporting</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem("gb-reporting-theme");
+      document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo.png') }}" />
 </head>
-<body>
+<body class="app-body">
   {% set current_range = range_key|default(request.args.get("range", "custom")) %}
   {% set current_start = start_date|default(request.args.get("start", "")) %}
   {% set current_end = end_date|default(request.args.get("end", "")) %}
@@ -17,99 +26,141 @@
   {% else %}
     {% set current_unit = request.args.get("unit", "case") %}
   {% endif %}
-  <header class="topbar">
-    <div class="brand">
-      <a class="brand-link" href="{{ url_for('dashboard') }}">
-        <div class="brand-mark">
-          <img src="{{ url_for('static', filename='Logo.png') }}" alt="Grimm's Bluff logo" />
-        </div>
-        <div>
-          <h1>Grimm's Bluff Dashboard</h1>
-          <p>Because WineDirect sucks</p>
+
+  {% set nav_items = [
+    ("dashboard", "Dashboard", "dashboard"),
+    ("orders", "Orders", "orders"),
+    ("products_report", "Products", "products_report"),
+    ("inventory", "Inventory", "inventory"),
+    ("tours", "Tours", "tours"),
+    ("settings", "Settings", "settings"),
+  ] %}
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="sidebar-brand" href="{{ url_for('dashboard') }}">
+        <span class="brand-logo-slot">
+          {# Logo.png = light mark for dark theme; Logo-Black.png = dark mark for light theme #}
+          <img
+            src="{{ url_for('static', filename='Logo.png') }}"
+            alt="Grimm's Bluff"
+            class="brand-logo-img brand-logo-img--for-dark-theme"
+            width="52"
+            height="52"
+          />
+          <img
+            src="{{ url_for('static', filename='Logo-Black.png') }}"
+            alt="Grimm's Bluff"
+            class="brand-logo-img brand-logo-img--for-light-theme"
+            width="52"
+            height="52"
+          />
+        </span>
+        <div class="sidebar-brand-text">
+          <span class="sidebar-name">Grimm's Bluff</span>
+          <span class="sidebar-tag">Reporting</span>
         </div>
       </a>
-    </div>
-    <div class="controls">
-      <a class="ghost-btn" href="{{ url_for('dashboard', range=current_range, start=current_start, end=current_end) }}">Dashboard</a>
-      <a class="ghost-btn" href="{{ url_for('orders', range=current_range, start=current_start, end=current_end) }}">Orders</a>
-      <a class="ghost-btn" href="{{ url_for('products_report', range=current_range, start=current_start, end=current_end) }}">Products Report</a>
-      <a class="ghost-btn" href="{{ url_for('inventory', range=current_range, start=current_start, end=current_end) }}">Inventory</a>
-      <a class="ghost-btn" href="{{ url_for('tours', range=current_range, start=current_start, end=current_end) }}">Tours</a>
-      <a class="ghost-btn" href="{{ url_for('settings', range=current_range, start=current_start, end=current_end) }}">Settings</a>
-      <a class="ghost-btn" href="{{ url_for('logout') }}">Log out</a>
-    </div>
-    <form class="date-form" method="get" action="{{ request.path }}" data-autosubmit>
-      <label>
-        Range
-        <select name="range">
-          <option value="this_month" {% if current_range == "this_month" %}selected{% endif %}>This month</option>
-          <option value="last_month" {% if current_range == "last_month" %}selected{% endif %}>Last month</option>
-          <option value="last_week" {% if current_range == "last_week" %}selected{% endif %}>Last week</option>
-          <option value="last_year" {% if current_range == "last_year" %}selected{% endif %}>Last year</option>
-          <option value="last_3_months" {% if current_range == "last_3_months" %}selected{% endif %}>Last 3 months</option>
-          <option value="last_12_months" {% if current_range == "last_12_months" %}selected{% endif %}>Last 12 months</option>
-          <option value="ytd" {% if current_range == "ytd" %}selected{% endif %}>Year to date</option>
-          <option value="custom" {% if current_range == "custom" %}selected{% endif %}>Custom</option>
-        </select>
-      </label>
-      <label>
-        Start
-        <input type="date" name="start" value="{{ current_start }}" />
-      </label>
-      <label>
-        End
-        <input type="date" name="end" value="{{ current_end }}" />
-      </label>
-      <label class="inline-check">
-        <input type="radio" name="unit" value="case" {% if current_unit == "case" %}checked{% endif %} />
-        Cases
-      </label>
-      <label class="inline-check">
-        <input type="radio" name="unit" value="bottle" {% if current_unit != "case" %}checked{% endif %} />
-        Bottles
-      </label>
-      {% for key, value in request.args.items() %}
-        {% if key not in ["range", "start", "end", "unit"] and key not in preserve_skip %}
-          <input type="hidden" name="{{ key }}" value="{{ value }}" />
-        {% endif %}
-      {% endfor %}
-    </form>
-    {% if export_excel_url or export_pdf_url %}
-      <div class="export-actions">
-        {% if export_excel_url %}
-          <a class="ghost-btn" href="{{ export_excel_url }}">Export Excel</a>
-        {% endif %}
-        {% if export_pdf_url %}
-          <a class="ghost-btn" href="{{ export_pdf_url }}">Export PDF</a>
-        {% endif %}
-      </div>
-    {% endif %}
-  </header>
+      <div class="sidebar-rule" aria-hidden="true"></div>
 
-  <main class="page">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="flash-wrap">
-          {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
-          {% endfor %}
+      <nav class="sidebar-nav">
+        {% for endpoint, label, route in nav_items %}
+          <a
+            class="nav-link{% if request.endpoint == endpoint %} is-active{% endif %}"
+            href="{{ url_for(route, range=current_range, start=current_start, end=current_end) }}"
+          >{{ label }}</a>
+        {% endfor %}
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <button type="button" class="theme-switch-btn" data-theme-set="dark" aria-pressed="true">Dark</button>
+          <button type="button" class="theme-switch-btn" data-theme-set="light" aria-pressed="false">Light</button>
         </div>
-      {% endif %}
-    {% endwith %}
-    <section class="panel controls-panel">
-      <div class="controls-panel-head">
+        <a class="nav-link nav-link-quiet" href="{{ url_for('logout') }}">Log out</a>
       </div>
-      <div class="controls-panel-body">
-        {% block controls %}{% endblock %}
-      </div>
-    </section>
-    {% block content %}{% endblock %}
-  </main>
+    </aside>
 
-  <footer class="footer">
-    <span>Grimm's Bluff Reporting</span>
-    <span>Powered by Grimmedia</span>
-  </footer>
+    <div class="app-main">
+      <header class="toolbar" aria-label="Date range and exports">
+        <form class="toolbar-form date-form" method="get" action="{{ request.path }}" data-autosubmit>
+          <div class="toolbar-group">
+            <label class="field">
+              <span class="field-label">Range</span>
+              <select name="range" class="field-control">
+                <option value="this_month" {% if current_range == "this_month" %}selected{% endif %}>This month</option>
+                <option value="last_month" {% if current_range == "last_month" %}selected{% endif %}>Last month</option>
+                <option value="last_week" {% if current_range == "last_week" %}selected{% endif %}>Last week</option>
+                <option value="last_year" {% if current_range == "last_year" %}selected{% endif %}>Last year</option>
+                <option value="last_3_months" {% if current_range == "last_3_months" %}selected{% endif %}>Last 3 months</option>
+                <option value="last_12_months" {% if current_range == "last_12_months" %}selected{% endif %}>Last 12 months</option>
+                <option value="ytd" {% if current_range == "ytd" %}selected{% endif %}>Year to date</option>
+                <option value="custom" {% if current_range == "custom" %}selected{% endif %}>Custom</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Start</span>
+              <input type="date" name="start" class="field-control" value="{{ current_start }}" />
+            </label>
+            <label class="field">
+              <span class="field-label">End</span>
+              <input type="date" name="end" class="field-control" value="{{ current_end }}" />
+            </label>
+          </div>
+
+          <div class="toolbar-group toolbar-unit" role="group" aria-label="Unit of measure">
+            <label class="segment">
+              <input type="radio" name="unit" value="case" {% if current_unit == "case" %}checked{% endif %} />
+              <span>Cases</span>
+            </label>
+            <label class="segment">
+              <input type="radio" name="unit" value="bottle" {% if current_unit != "case" %}checked{% endif %} />
+              <span>Bottles</span>
+            </label>
+          </div>
+
+          {% for key, value in request.args.items() %}
+            {% if key not in ["range", "start", "end", "unit"] and key not in preserve_skip %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}" />
+            {% endif %}
+          {% endfor %}
+        </form>
+
+        {% if export_excel_url or export_pdf_url %}
+          <div class="toolbar-actions">
+            {% if export_excel_url %}
+              <a class="btn btn-secondary" href="{{ export_excel_url }}">Excel</a>
+            {% endif %}
+            {% if export_pdf_url %}
+              <a class="btn btn-secondary" href="{{ export_pdf_url }}">PDF</a>
+            {% endif %}
+          </div>
+        {% endif %}
+      </header>
+
+      <main class="page">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-wrap">
+              {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
+        {% block controls %}
+        {% endblock %}
+
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="footer">
+        <span>Grimm's Bluff Reporting</span>
+        <span class="footer-credit">Grimmedia</span>
+      </footer>
+    </div>
+  </div>
 
   <script>
     function getCellValue(row, idx) {
@@ -256,6 +307,7 @@
     });
   </script>
 
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

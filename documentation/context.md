@@ -39,10 +39,14 @@ Reporting dates use **America/Los_Angeles** for “today” and display logic wh
 
 - **`Reporting.py`**: Standalone script with a hardcoded CSV path; not wired into the Flask app. Treat as experimental or historical unless repurposed.
 
-## UI typography
+## UI design
 
-- Web UI and Plotly charts use **Arial** only (`static/styles.css`, `static/charts.js`).
-- Matplotlib report images use Arial via `reports.py` rcParams.
+- **Brand alignment**: Matches [grimmsbluff.events](https://www.grimmsbluff.events) and `grimms-bluff-wines/Reference/gb-styles.css` (dark default, gold accent, cream text).
+- **Themes**: Dark (default) and light via sidebar toggle; persisted in `localStorage` (`static/theme.js`, `data-theme` on `<html>`).
+- **Shell**: Left sidebar navigation, sticky toolbar for date range / unit / exports (`templates/base.html`).
+- **Typography**: Cormorant Garamond (headings) + Jost (UI); Plotly uses Jost (`static/charts.js`).
+- **Product context**: `PRODUCT.md`, `DESIGN.md` at repo root.
+- Matplotlib report images still use Arial via `reports.py` rcParams.
 - PDF exports register system Arial for ReportLab (`exporters.py`).
 
 ## Configuration
@@ -51,6 +55,8 @@ Reporting dates use **America/Los_Angeles** for “today” and display logic wh
 
 ## Last updated
 
+- 2026-05-21: Brand-aligned dark/light themes (gold/cream palette, Cormorant + Jost, theme toggle).
+- 2026-05-21: Full UI redesign (sidebar app shell, updated dashboard/tours charts).
 - 2026-05-21: `GB_REPORTING_DB_PATH` and clearer SQLite startup errors for production permissions.
 - 2026-05-21: Typography standardized on Arial across CSS, charts, and PDF export.
 - 2026-05-21: Initial context and operations documentation added.

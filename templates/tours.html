@@ -35,22 +35,20 @@
       <p>Upload a Tock transactions CSV to get started.</p>
     </section>
   {% else %}
-    <section class="panel kpi-panel">
-      <div class="panel-head">
-        <h2>Tour Booking KPIs</h2>
-        <p>Summary of bookings for the selected date range</p>
+    <section class="metrics-section">
+      <div class="section-head">
+        <h2>Tour booking <em>KPIs</em></h2>
+        <p>Summary for the selected date range.</p>
       </div>
-      <div class="kpi-grid">
+      <div class="metrics-strip">
         {% for label, value in report.kpis %}
-          <div class="kpi-tile">
-            <div class="kpi-meta">
-              <div class="kpi-value">{{ value }}</div>
-              <div class="kpi-label">{{ label }}</div>
-              {% if label == "Avg Revenue / Guest" %}
-                <div class="kpi-subtitle">Tours + matched orders</div>
-              {% endif %}
-            </div>
-          </div>
+          <article class="metric">
+            <span class="metric-value">{{ value }}</span>
+            <span class="metric-label">{{ label }}</span>
+            {% if label == "Avg Revenue / Guest" %}
+              <span class="metric-note">Tours + matched orders</span>
+            {% endif %}
+          </article>
         {% endfor %}
       </div>
     </section>
@@ -205,6 +203,7 @@
           automargin: true,
         };
       };
+      const C = window.GB_CHART_COLORS || {};
       if (!charts || !charts.monthly) return;
       const fullExperienceLabels = charts.experiences?.labels || [];
       const truncateLabel = (label, maxLen = 28) => {
@@ -222,7 +221,7 @@
             y: charts.monthly.bookings || [],
             type: "bar",
             name: "Bookings",
-            marker: { color: "#0f8da0" },
+            marker: { color: C.primary },
           },
           {
             x: charts.monthly.labels || [],
@@ -230,7 +229,8 @@
             type: "scatter",
             mode: "lines+markers",
             name: "Guests",
-            line: { color: "#f7b44a" },
+            line: { color: C.highlight, width: 2 },
+            marker: { color: C.highlight, size: 6 },
           },
         ],
         gbChartLayout({
@@ -248,7 +248,7 @@
             x: charts.monthly.labels || [],
             y: charts.monthly.sales || [],
             type: "bar",
-            marker: { color: "#5c8ef2" },
+            marker: { color: C.secondary },
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
@@ -268,7 +268,7 @@
             y: shortExperienceLabels,
             type: "bar",
             orientation: "h",
-            marker: { color: "#0b6c7c" },
+            marker: { color: C.tertiary },
             customdata: fullExperienceLabels,
             hovertemplate: "%{customdata}<br>%{x} bookings<extra></extra>",
           },
@@ -288,7 +288,7 @@
             y: shortExperienceLabels,
             type: "bar",
             orientation: "h",
-            marker: { color: "#7dd3d6" },
+            marker: { color: C.muted },
             customdata: fullExperienceLabels,
             hovertemplate: "%{customdata}<br>$%{x:,.2f}<extra></extra>",
           },

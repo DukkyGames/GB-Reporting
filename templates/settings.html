@@ -10,7 +10,7 @@
       <input type="checkbox" name="replace_existing" value="1" />
       Replace existing data
     </label>
-    <button type="submit" class="primary-btn">Import CSV</button>
+    <button type="submit" class="btn btn-primary">Import CSV</button>
   </form>
 {% endblock %}
 
@@ -18,19 +18,19 @@
   <section class="panel control-panel">
     <div class="control-group">
       <form method="post" action="{{ url_for('refresh_orders') }}" class="inline-form" data-confirm="This will clear all orders and reload from WineDirect. Continue?">
-        <button type="submit" class="primary-btn">Refresh Orders</button>
+        <button type="submit" class="btn btn-primary">Refresh Orders</button>
       </form>
       <form method="post" action="{{ url_for('refresh_products') }}" class="inline-form" data-confirm="This will clear all products and reload from WineDirect. Continue?">
-        <button type="submit" class="primary-btn">Refresh Products</button>
+        <button type="submit" class="btn btn-primary">Refresh Products</button>
       </form>
       <form method="post" action="{{ url_for('refresh_inventory') }}" class="inline-form" data-confirm="This will clear all inventory and reload from WineDirect. Continue?">
-        <button type="submit" class="primary-btn">Refresh Inventory</button>
+        <button type="submit" class="btn btn-primary">Refresh Inventory</button>
       </form>
       <form method="post" action="{{ url_for('refresh_latest') }}" class="inline-form">
-        <button type="submit" class="primary-btn">Update Latest Data</button>
+        <button type="submit" class="btn btn-primary">Update Latest Data</button>
       </form>
       <form method="post" action="{{ url_for('rate_check') }}" class="inline-form">
-        <button type="submit" class="primary-btn">Rate Check</button>
+        <button type="submit" class="btn btn-primary">Rate Check</button>
       </form>
     </div>
   </section>

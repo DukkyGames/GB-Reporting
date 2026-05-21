@@ -3,33 +3,65 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Login - Grimm's Bluff</title>
+  <title>Sign in · Grimm's Bluff</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem("gb-reporting-theme");
+      document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo.png') }}" />
 </head>
 <body class="login-page">
-  <main class="login-card">
-    <img src="{{ url_for('static', filename='Logo-Black.png') }}" alt="Grimm's Bluff logo" class="login-logo" />
-    <h1>Executive Access</h1>
-    <p>Sign in to view reports.</p>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="flash {{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-    <form method="post" class="login-form">
-      <label>
-        Username
-        <input type="text" name="username" required />
-      </label>
-      <label>
-        Password
-        <input type="password" name="password" required />
-      </label>
-      <button type="submit" class="primary-btn">Sign in</button>
-    </form>
-  </main>
+  <div class="login-layout">
+    <main class="login-card">
+      <span class="brand-logo-slot brand-logo-slot--login">
+        <img
+          src="{{ url_for('static', filename='Logo.png') }}"
+          alt="Grimm's Bluff"
+          class="brand-logo-img brand-logo-img--for-dark-theme"
+          width="80"
+          height="80"
+        />
+        <img
+          src="{{ url_for('static', filename='Logo-Black.png') }}"
+          alt="Grimm's Bluff"
+          class="brand-logo-img brand-logo-img--for-light-theme"
+          width="80"
+          height="80"
+        />
+      </span>
+      <h1><em>Reporting</em></h1>
+      <p>Sign in to view winery analytics.</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      <form method="post" class="login-form">
+        <label>
+          Username
+          <input type="text" name="username" required autocomplete="username" />
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" required autocomplete="current-password" />
+        </label>
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+      <div class="theme-switch" role="group" aria-label="Color theme">
+        <button type="button" class="theme-switch-btn" data-theme-set="dark">Dark</button>
+        <button type="button" class="theme-switch-btn" data-theme-set="light">Light</button>
+      </div>
+    </main>
+    <p class="login-foot">Grimm's Bluff · Internal use only</p>
+  </div>
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
 </body>
 </html>

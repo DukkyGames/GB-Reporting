@@ -1,17 +1,22 @@
 ﻿{% extends "base.html" %}
 
+{% block title %}Dashboard{% endblock %}
+
 {% block content %}
   {% if report.empty %}
     <section class="panel">
-      <h2>No data available</h2>
-      <p>Use the date selector above or run a cache refresh.</p>
+      <div class="section-head">
+        <h2>No data available</h2>
+        <p>Use the date range above or run a cache refresh from Settings.</p>
+      </div>
     </section>
   {% else %}
-    <section class="panel kpi-panel">
-      <div class="panel-head">
-        <h2>Financial Snapshot</h2>
+    <section class="metrics-section">
+      <div class="section-head">
+        <h2>Financial <em>snapshot</em></h2>
+        <p>Key figures for the selected period.</p>
       </div>
-      <div class="kpi-grid">
+      <div class="metrics-strip">
         {% set kpi_icons = {
           "Net Sales": "icons/Net Sales.png",
           "Product Net Sales": "icons/Net Sales.png",
@@ -32,39 +37,35 @@
           "Taxes Collected": "icons/Taxes Collected.png",
           "Peak Month": "icons/Peak Month.png",
           "Best Day": "icons/Peak Month.png",
-          "Lowest Month": "icons/Lowest month.png"
-          ,
+          "Lowest Month": "icons/Lowest month.png",
           "Lowest Day": "icons/Lowest month.png"
         } %}
         {% for label, value in report.kpis %}
-          <div class="kpi-tile">
+          <article class="metric">
             {% set icon = kpi_icons.get(label) %}
             {% if icon %}
-              <img class="kpi-icon" src="{{ url_for('static', filename=icon) }}" alt="" />
+              <img class="metric-icon" src="{{ url_for('static', filename=icon) }}" alt="" />
             {% endif %}
-            <div class="kpi-meta">
-              <div class="kpi-value">{{ value }}</div>
-              <div class="kpi-label">{{ label }}</div>
-            </div>
-          </div>
+            <span class="metric-value">{{ value }}</span>
+            <span class="metric-label">{{ label }}</span>
+          </article>
         {% endfor %}
       </div>
     </section>
 
     {% if tours_report and not tours_report.empty %}
-      <section class="panel kpi-panel">
-        <div class="panel-head">
-          <h2>Tour Bookings Snapshot</h2>
+      <section class="metrics-section">
+        <div class="section-head">
+          <h2>Tour bookings</h2>
+          <p>Tock tour activity for the same period.</p>
         </div>
-        <div class="kpi-grid">
+        <div class="metrics-strip">
           {% for label, value in tours_report.kpis %}
             {% if label in ["Bookings", "Guests", "Collected"] %}
-              <div class="kpi-tile">
-                <div class="kpi-meta">
-                  <div class="kpi-value">{{ value }}</div>
-                  <div class="kpi-label">{{ label }}</div>
-                </div>
-              </div>
+              <article class="metric">
+                <span class="metric-value">{{ value }}</span>
+                <span class="metric-label">{{ label }}</span>
+              </article>
             {% endif %}
           {% endfor %}
         </div>
@@ -73,14 +74,14 @@
       <section class="grid two-col">
         <div class="panel">
           <div class="panel-head">
-            <h3>Tour Bookings & Guests</h3>
+            <h3>Tour bookings & guests</h3>
             <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} bookings (bars) and guests (line)</p>
           </div>
           <div class="chart-plot" id="tours-dashboard-bookings"></div>
         </div>
         <div class="panel">
           <div class="panel-head">
-            <h3>Tour Collected</h3>
+            <h3>Tour collected</h3>
             <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} collected revenue</p>
           </div>
           <div class="chart-plot" id="tours-dashboard-collected"></div>
@@ -91,7 +92,7 @@
     <section class="grid two-col">
       <div class="panel">
         <div class="panel-head">
-          <h3>{% if is_single_month %}Daily{% else %}Monthly{% endif %} Net Sales</h3>
+          <h3>{% if is_single_month %}Daily{% else %}Monthly{% endif %} net sales</h3>
           <p>Trend of net sales{% if not is_single_month %} across the year{% endif %}</p>
         </div>
         <div class="chart-plot" id="chart-monthly-net-sales"></div>
@@ -108,19 +109,19 @@
     <section class="grid three-col">
       <div class="panel">
         <div class="panel-head">
-          <h3>Top Products by Revenue</h3>
+          <h3>Top products by revenue</h3>
         </div>
         <div class="chart-plot" id="chart-top-products-revenue"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
-          <h3>Top Products by Units</h3>
+          <h3>Top products by units</h3>
         </div>
         <div class="chart-plot" id="chart-top-products-units"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
-          <h3>Customer Mix</h3>
+          <h3>Customer mix</h3>
         </div>
         <div class="chart-plot" id="chart-customer-mix"></div>
       </div>
@@ -129,13 +130,13 @@
     <section class="grid two-col">
       <div class="panel">
         <div class="panel-head">
-          <h3>Sales by Channel</h3>
+          <h3>Sales by channel</h3>
         </div>
         <div class="chart-plot" id="chart-sales-by-channel"></div>
       </div>
       <div class="panel">
         <div class="panel-head">
-          <h3>Top States (Shipped Orders)</h3>
+          <h3>Top states (shipped orders)</h3>
         </div>
         <div class="chart-plot" id="chart-top-states"></div>
       </div>
@@ -143,7 +144,7 @@
 
     <section class="panel table-panel">
       <div class="panel-head">
-        <h3>Monthly Summary</h3>
+        <h3>Monthly summary</h3>
         <p>Net sales, orders, and {{ unit_label|lower }} by month</p>
       </div>
       <div class="table-wrap">
@@ -177,6 +178,8 @@
   <script src="{{ url_for('static', filename='charts.js') }}"></script>
   <script>
     (function () {
+      const C = window.GB_CHART_COLORS || {};
+      const gridColor = typeof gbChartGridColor === "function" ? gbChartGridColor() : "#ebe6df";
       const charts = {{ report.charts | tojson }};
       const isSingleMonth = {{ is_single_month | tojson }};
       const hasDailyLabels = (labels) =>
@@ -212,15 +215,17 @@
             y: netSales,
             type: "scatter",
             mode: "lines+markers",
-            line: { color: "#0f8da0" },
+            line: { color: C.primary, width: 2 },
+            marker: { color: C.primary, size: 6 },
             fill: "tozeroy",
+            fillcolor: C.fill,
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
-          yaxis: { tickprefix: "$" },
-          xaxis: buildTicks(monthLabels),
+          yaxis: { tickprefix: "$", gridcolor: gridColor },
+          xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(monthLabels)),
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -233,7 +238,7 @@
             y: orders,
             type: "bar",
             name: "Orders",
-            marker: { color: "#7dd3d6" },
+            marker: { color: C.secondary },
             hovertemplate: "%{x}<br>%{y} orders<extra></extra>",
           },
           {
@@ -242,14 +247,16 @@
             type: "scatter",
             mode: "lines+markers",
             name: unitLabel,
-            line: { color: "#f7b44a" },
+            line: { color: C.highlight, width: 2 },
+            marker: { color: C.highlight, size: 6 },
             hovertemplate: `%{x}<br>%{y} ${unitLabel.toLowerCase()}<extra></extra>`,
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
           barmode: "group",
-          xaxis: buildTicks(monthLabels),
+          xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(monthLabels)),
+          yaxis: { gridcolor: gridColor },
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -267,14 +274,14 @@
             y: topRevenueLabels,
             type: "bar",
             orientation: "h",
-            marker: { color: "#5c8ef2" },
+            marker: { color: C.primary },
             hovertemplate: "%{y}<br>$%{x:,.2f}<extra></extra>",
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 80 },
-          xaxis: { tickprefix: "$", range: [-revenuePad, maxRevenue * 1.02], zeroline: false },
-          yaxis: { autorange: "reversed" },
+          xaxis: { tickprefix: "$", range: [-revenuePad, maxRevenue * 1.02], zeroline: false, gridcolor: gridColor },
+          yaxis: { autorange: "reversed", gridcolor: "transparent" },
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -292,14 +299,14 @@
             y: topUnitsLabels,
             type: "bar",
             orientation: "h",
-            marker: { color: "#0b6c7c" },
+            marker: { color: C.tertiary },
             hovertemplate: "%{y}<br>%{x} units<extra></extra>",
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 80 },
-          xaxis: { range: [-unitsPad, maxUnits * 1.02], zeroline: false },
-          yaxis: { autorange: "reversed" },
+          xaxis: { range: [-unitsPad, maxUnits * 1.02], zeroline: false, gridcolor: gridColor },
+          yaxis: { autorange: "reversed", gridcolor: "transparent" },
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -311,9 +318,10 @@
             labels: charts.customer_mix.labels || [],
             values: charts.customer_mix.values || [],
             type: "pie",
-            marker: { colors: ["#0f8da0", "#7dd3d6"] },
+            marker: { colors: [C.primary, C.secondary, C.highlight, C.tertiary].filter(Boolean) },
             textinfo: "label+percent",
             hovertemplate: "%{label}: %{value}<extra></extra>",
+            hole: 0.45,
           },
         ],
         gbChartLayout({
@@ -329,14 +337,14 @@
             x: charts.sales_by_channel.labels || [],
             y: charts.sales_by_channel.values || [],
             type: "bar",
-            marker: { color: "#0f8da0" },
+            marker: { color: C.primary },
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.sales_by_channel.labels || []), l: 50 },
-          yaxis: { tickprefix: "$" },
-          xaxis: buildTicks(charts.sales_by_channel.labels || []),
+          yaxis: { tickprefix: "$", gridcolor: gridColor },
+          xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(charts.sales_by_channel.labels || [])),
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -348,14 +356,14 @@
             x: charts.top_states.labels || [],
             y: charts.top_states.values || [],
             type: "bar",
-            marker: { color: "#0b6c7c" },
+            marker: { color: C.tertiary },
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
         gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.top_states.labels || []), l: 50 },
-          yaxis: { tickprefix: "$" },
-          xaxis: buildTicks(charts.top_states.labels || []),
+          yaxis: { tickprefix: "$", gridcolor: gridColor },
+          xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(charts.top_states.labels || [])),
         }),
         { displayModeBar: false, responsive: true }
       );
@@ -369,7 +377,7 @@
               y: toursCharts.monthly.bookings || [],
               type: "bar",
               name: "Bookings",
-              marker: { color: "#0f8da0" },
+              marker: { color: C.primary },
             },
             {
               x: toursCharts.monthly.labels || [],
@@ -377,13 +385,15 @@
               type: "scatter",
               mode: "lines+markers",
               name: "Guests",
-              line: { color: "#f7b44a" },
+              line: { color: C.highlight, width: 2 },
+              marker: { color: C.highlight, size: 6 },
             },
           ],
           gbChartLayout({
             margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
             barmode: "group",
-            xaxis: buildTicks(toursCharts.monthly.labels || []),
+            xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(toursCharts.monthly.labels || [])),
+            yaxis: { gridcolor: gridColor },
           }),
           { displayModeBar: false, responsive: true }
         );
@@ -395,14 +405,14 @@
               x: toursCharts.monthly.labels || [],
               y: toursCharts.monthly.collected || [],
               type: "bar",
-              marker: { color: "#5c8ef2" },
+              marker: { color: C.secondary },
               hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
             },
           ],
           gbChartLayout({
             margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
-            yaxis: { tickprefix: "$" },
-            xaxis: buildTicks(toursCharts.monthly.labels || []),
+            yaxis: { tickprefix: "$", gridcolor: gridColor },
+            xaxis: Object.assign({ gridcolor: "transparent" }, buildTicks(toursCharts.monthly.labels || [])),
           }),
           { displayModeBar: false, responsive: true }
         );
