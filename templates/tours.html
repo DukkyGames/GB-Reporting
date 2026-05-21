@@ -137,6 +137,7 @@
 {% block scripts %}
   {{ super() }}
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="{{ url_for('static', filename='charts.js') }}"></script>
   <script>
     (function () {
       const dropdown = document.querySelector("[data-dropdown]");
@@ -198,7 +199,7 @@
           tickvals: labels,
           ticktext: labels,
           tickangle: daily ? -60 : -35,
-          tickfont: { size: daily ? 9 : 10 },
+          tickfont: gbTickFont(daily ? 9 : 10),
           ticklabelstandoff: 6,
           ticklabeloverflow: "allow",
           automargin: true,
@@ -232,11 +233,11 @@
             line: { color: "#f7b44a" },
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.monthly.labels || []), l: 50 },
           barmode: "group",
           xaxis: buildTicks(charts.monthly.labels || []),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -251,11 +252,11 @@
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.monthly.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
           xaxis: buildTicks(charts.monthly.labels || []),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -272,10 +273,10 @@
             hovertemplate: "%{customdata}<br>%{x} bookings<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 180 },
           yaxis: { autorange: "reversed", automargin: true },
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -292,11 +293,11 @@
             hovertemplate: "%{customdata}<br>$%{x:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 180 },
           xaxis: { tickprefix: "$" },
           yaxis: { autorange: "reversed", automargin: true },
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
     })();

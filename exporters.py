@@ -12,8 +12,33 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, TableStyle, Image, LongTable, Table, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 from reports import build_report, build_report_pdf
+
+PDF_FONT_NAME = "Arial"
+
+
+def _register_arial_font() -> str:
+    """Register Arial for ReportLab PDF output from common system font paths."""
+    if PDF_FONT_NAME in pdfmetrics.getRegisteredFontNames():
+        return PDF_FONT_NAME
+    windir = os.environ.get("WINDIR", r"C:\Windows")
+    candidates = [
+        os.path.join(windir, "Fonts", "arial.ttf"),
+        os.path.join(windir, "Fonts", "Arial.ttf"),
+        "/Library/Fonts/Arial.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
+        "/usr/share/fonts/truetype/msttcorefonts/arial.ttf",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            pdfmetrics.registerFont(TTFont(PDF_FONT_NAME, path))
+            return PDF_FONT_NAME
+    raise RuntimeError(
+        "Arial font file not found. Install Arial or place arial.ttf on the server for PDF export."
+    )
 
 BRAND_TEAL = colors.HexColor("#0f8da0")
 BRAND_DARK = colors.HexColor("#0b6c7c")
@@ -26,7 +51,10 @@ def _logo_path() -> str:
 
 
 def _make_styles():
+    _register_arial_font()
     styles = getSampleStyleSheet()
+    for style in styles.byName.values():
+        style.fontName = PDF_FONT_NAME
     styles["Title"].fontSize = 20
     styles["Title"].leading = 24
     styles["Title"].textColor = BRAND_DARK
@@ -200,7 +228,7 @@ def _build_table(data: list[list[str]], col_widths: list[float] | None = None) -
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
                 ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ("FONTNAME", (0, 0), (-1, -1), PDF_FONT_NAME),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT_ROW]),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),

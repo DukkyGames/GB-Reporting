@@ -174,6 +174,7 @@
 
 {% block scripts %}
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="{{ url_for('static', filename='charts.js') }}"></script>
   <script>
     (function () {
       const charts = {{ report.charts | tojson }};
@@ -189,7 +190,7 @@
           tickvals: labels,
           ticktext: labels,
           tickangle: daily ? -60 : -35,
-          tickfont: { size: daily ? 9 : 10 },
+          tickfont: gbTickFont(daily ? 9 : 10),
           ticklabelstandoff: 6,
           ticklabeloverflow: "allow",
           automargin: true,
@@ -216,11 +217,11 @@
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
           yaxis: { tickprefix: "$" },
           xaxis: buildTicks(monthLabels),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -245,11 +246,11 @@
             hovertemplate: `%{x}<br>%{y} ${unitLabel.toLowerCase()}<extra></extra>`,
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(monthLabels), l: 50 },
           barmode: "group",
           xaxis: buildTicks(monthLabels),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -270,11 +271,11 @@
             hovertemplate: "%{y}<br>$%{x:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 80 },
           xaxis: { tickprefix: "$", range: [-revenuePad, maxRevenue * 1.02], zeroline: false },
           yaxis: { autorange: "reversed" },
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -295,11 +296,11 @@
             hovertemplate: "%{y}<br>%{x} units<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: 30, l: 80 },
           xaxis: { range: [-unitsPad, maxUnits * 1.02], zeroline: false },
           yaxis: { autorange: "reversed" },
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -315,9 +316,9 @@
             hovertemplate: "%{label}: %{value}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: 10, l: 10 },
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -332,11 +333,11 @@
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.sales_by_channel.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
           xaxis: buildTicks(charts.sales_by_channel.labels || []),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -351,11 +352,11 @@
             hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
           },
         ],
-        {
+        gbChartLayout({
           margin: { t: 10, r: 10, b: chartBottomMargin(charts.top_states.labels || []), l: 50 },
           yaxis: { tickprefix: "$" },
           xaxis: buildTicks(charts.top_states.labels || []),
-        },
+        }),
         { displayModeBar: false, responsive: true }
       );
 
@@ -379,11 +380,11 @@
               line: { color: "#f7b44a" },
             },
           ],
-          {
+          gbChartLayout({
             margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
             barmode: "group",
             xaxis: buildTicks(toursCharts.monthly.labels || []),
-          },
+          }),
           { displayModeBar: false, responsive: true }
         );
 
@@ -398,11 +399,11 @@
               hovertemplate: "%{x}<br>$%{y:,.2f}<extra></extra>",
             },
           ],
-          {
+          gbChartLayout({
             margin: { t: 10, r: 10, b: chartBottomMargin(toursCharts.monthly.labels || []), l: 50 },
             yaxis: { tickprefix: "$" },
             xaxis: buildTicks(toursCharts.monthly.labels || []),
-          },
+          }),
           { displayModeBar: false, responsive: true }
         );
       }

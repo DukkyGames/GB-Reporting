@@ -6,6 +6,12 @@ import base64
 
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Arial"],
+    }
+)
 import matplotlib.pyplot as plt
 import pandas as pd
 

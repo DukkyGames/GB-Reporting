@@ -1,4 +1,5 @@
 :root {
+  --font-family: Arial, sans-serif;
   --ink: #12303a;
   --muted: #5e6c74;
   --teal: #0f8da0;
@@ -16,9 +17,19 @@
   box-sizing: border-box;
 }
 
+body,
+input,
+select,
+textarea,
+button,
+table,
+th,
+td {
+  font-family: var(--font-family);
+}
+
 body {
   margin: 0;
-  font-family: "Gill Sans", "Trebuchet MS", "Candara", "Tahoma", sans-serif;
   color: var(--ink);
   background: radial-gradient(circle at top left, #e7f5f7 0%, #f7fafb 45%, #ffffff 100%);
 }
@@ -479,7 +490,7 @@ body {
 }
 
 .mono {
-  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", "Courier New", monospace;
+  font-family: var(--font-family);
   font-size: 0.85rem;
 }
 
