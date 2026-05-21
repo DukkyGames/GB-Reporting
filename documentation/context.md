@@ -45,7 +45,12 @@ Reporting dates use **America/Los_Angeles** for “today” and display logic wh
 - Matplotlib report images use Arial via `reports.py` rcParams.
 - PDF exports register system Arial for ReportLab (`exporters.py`).
 
+## Configuration
+
+- **`GB_REPORTING_DB_PATH`** — Optional SQLite path (default `data/app.db`). Production systemd example uses `/var/lib/gb-reporting/app.db` with `StateDirectory=gb-reporting`.
+
 ## Last updated
 
+- 2026-05-21: `GB_REPORTING_DB_PATH` and clearer SQLite startup errors for production permissions.
 - 2026-05-21: Typography standardized on Arial across CSS, charts, and PDF export.
 - 2026-05-21: Initial context and operations documentation added.

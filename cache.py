@@ -18,9 +18,19 @@ def get_db(path: str) -> sqlite3.Connection:
 
 
 def init_db(path: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    db = get_db(path)
-    db.executescript(
+    db_dir = os.path.dirname(os.path.abspath(path))
+    try:
+        os.makedirs(db_dir, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(f"Cannot create database directory {db_dir}: {exc}") from exc
+    if not os.access(db_dir, os.W_OK):
+        raise PermissionError(
+            f"Database directory is not writable: {db_dir}. "
+            "Ensure the service user owns this path or set GB_REPORTING_DB_PATH."
+        )
+    try:
+        db = get_db(path)
+        db.executescript(
         """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,12 +200,20 @@ def init_db(path: str) -> None:
             raw_json TEXT
         );
         """
-    )
-    db.commit()
-    _ensure_order_columns(db)
-    _ensure_order_item_columns(db)
-    _ensure_inventory_columns(db)
-    db.close()
+        )
+        db.commit()
+        _ensure_order_columns(db)
+        _ensure_order_item_columns(db)
+        _ensure_inventory_columns(db)
+        db.close()
+    except sqlite3.OperationalError as exc:
+        if "disk I/O error" in str(exc).lower():
+            raise RuntimeError(
+                f"SQLite disk I/O error for {path}. "
+                f"Check free disk space, permissions on {db_dir}, "
+                "and that the database file is not on a read-only mount."
+            ) from exc
+        raise
 
 
 def _ensure_order_columns(db: sqlite3.Connection) -> None:

@@ -54,7 +54,11 @@ from exporters import (
 load_dotenv()
 
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(APP_ROOT, "data", "app.db")
+# Override in production when the app tree is not writable (e.g. systemd StateDirectory).
+DB_PATH = os.environ.get(
+    "GB_REPORTING_DB_PATH",
+    os.path.join(APP_ROOT, "data", "app.db"),
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this")

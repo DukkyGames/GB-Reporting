@@ -39,6 +39,7 @@ Copy `.env.example` to `.env` and fill in real values. Never commit `.env`.
 | `CACHE_HOUR` / `CACHE_MINUTE` | Time-of-day for the nightly job; APScheduler’s default cron uses the **host’s local timezone**. The refresh window’s end date is computed in **UTC** in code—see `app.py` if you need exact semantics. |
 | `LATEST_DAYS` | Window for the **every-5-minutes** incremental order refresh (default `7`) |
 | `FLASK_ENV` | e.g. `production` |
+| `GB_REPORTING_DB_PATH` | SQLite file path (default `data/app.db` under the app root). On Linux, prefer `/var/lib/gb-reporting/app.db` via systemd `StateDirectory` so `www-data` can write. |
 
 ### Gunicorn (production only)
 
@@ -194,6 +195,7 @@ If refreshes overlap, some paths skip when `refresh_in_progress` is already set.
 
 | Symptom | Things to check |
 |---------|------------------|
+| `sqlite3.OperationalError: disk I/O error` on start | Service user must **write** the DB directory (`data/` or `GB_REPORTING_DB_PATH`). Run `df -h`; `sudo ls -la /opt/gb-reporting/GB-Reporting/data`; fix with `sudo chown -R www-data:www-data .../data` or use `StateDirectory` + `GB_REPORTING_DB_PATH` in `gb-reporting.service.example`. |
 | Login fails | `ADMIN_USER` / `ADMIN_PASSWORD`; DB at `data/app.db`; delete DB only if you intend to reset (recreates admin). |
 | Empty dashboard | WineDirect credentials; sync still running; `CACHE_DAYS` too narrow; errors in Settings / `journalctl`. |
 | Stuck / rate limit | Set `WINE_RATE_LIMIT_WAIT=1`; disable or cap order detail (`WINE_FETCH_ORDER_DETAIL`, `WINE_ORDER_DETAIL_MAX`). |
