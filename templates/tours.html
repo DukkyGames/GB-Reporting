@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import section_head, panel_head, metric, chart_panel %}
 
 {% block controls %}
   <form class="filter-form" method="get" action="{{ url_for('tours') }}">
@@ -30,66 +31,36 @@
 
 {% block content %}
   {% if report.empty %}
-    <section class="panel">
-      <h2>No tour bookings data</h2>
-      <p>Upload a Tock transactions CSV to get started.</p>
-    </section>
+    {% set actions = [(url_for('settings'), 'Upload Tock CSV', 'btn-primary')] %}
+    {% set title = 'No tour bookings yet' %}
+    {% set description = 'Import a Tock transactions CSV from Settings, or choose a date range that includes uploaded bookings.' %}
+    {% include 'partials/empty_state.html' %}
   {% else %}
     <section class="metrics-section">
-      <div class="section-head">
-        <h2>Tour booking <em>KPIs</em></h2>
-        <p>Summary for the selected date range.</p>
-      </div>
+      {{ section_head('Tour booking', emphasis='KPIs', description='Summary for the selected date range.') }}
       <div class="metrics-strip">
         {% for label, value in report.kpis %}
-          <article class="metric">
-            <span class="metric-value">{{ value }}</span>
-            <span class="metric-label">{{ label }}</span>
-            {% if label == "Avg Revenue / Guest" %}
-              <span class="metric-note">Tours + matched orders</span>
-            {% endif %}
-          </article>
+          {{ metric(
+            value,
+            label,
+            note='Tours + matched orders' if label == 'Avg Revenue / Guest' else None
+          ) }}
         {% endfor %}
       </div>
     </section>
 
     <section class="grid two-col">
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Bookings Over Time</h3>
-          <p>Monthly bookings and guests</p>
-        </div>
-        <div class="chart-plot" id="tours-monthly"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Revenue Over Time</h3>
-          <p>Monthly gross sales</p>
-        </div>
-        <div class="chart-plot" id="tours-sales"></div>
-      </div>
+      {{ chart_panel('Bookings Over Time', 'tours-monthly', 'Monthly bookings and guests') }}
+      {{ chart_panel('Revenue Over Time', 'tours-sales', 'Monthly gross sales') }}
     </section>
 
     <section class="grid two-col">
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Top Experiences (Bookings)</h3>
-        </div>
-        <div class="chart-plot" id="tours-experiences"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Top Experiences (Revenue)</h3>
-        </div>
-        <div class="chart-plot" id="tours-experience-sales"></div>
-      </div>
+      {{ chart_panel('Top Experiences (Bookings)', 'tours-experiences') }}
+      {{ chart_panel('Top Experiences (Revenue)', 'tours-experience-sales') }}
     </section>
 
     <section class="panel table-panel">
-      <div class="panel-head">
-        <h3>Latest Bookings</h3>
-        <p>Showing up to 200 bookings from the current range</p>
-      </div>
+      {{ panel_head('Latest Bookings', 'Showing up to 200 bookings from the current range') }}
       <div class="table-wrap">
         <table>
           <thead>
@@ -107,8 +78,8 @@
             {% for row in report.table %}
               <tr>
                 <td>{{ row.booking_date }}</td>
-                <td>{{ row.customer }}</td>
-                <td>{{ row.experience }}</td>
+                <td class="cell-truncate" title="{{ row.customer }}">{{ row.customer }}</td>
+                <td class="cell-truncate" title="{{ row.experience }}">{{ row.experience }}</td>
                 <td>{{ row.party_size }}</td>
                 <td>${{ "%.2f"|format(row.total_price) }}</td>
                 <td>${{ "%.2f"|format(row.payment_collected) }}</td>
@@ -121,8 +92,8 @@
                 </td>
               </tr>
             {% else %}
-              <tr>
-                <td colspan="7">No bookings for this range.</td>
+              <tr class="table-empty-row">
+                <td colspan="7">No bookings match this range and experience filters.</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -213,7 +184,7 @@
       };
       const shortExperienceLabels = fullExperienceLabels.map((label) => truncateLabel(label));
 
-      Plotly.newPlot(
+      gbPlotly(
         "tours-monthly",
         [
           {
@@ -241,7 +212,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "tours-sales",
         [
           {
@@ -260,7 +231,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "tours-experiences",
         [
           {
@@ -280,7 +251,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "tours-experience-sales",
         [
           {

@@ -1,0 +1,55 @@
+{# Reusable UI macros — import: {% from 'macros/ui.html' import section_head, panel_head, metric, chart_panel, flash_messages %} #}
+
+{% macro section_head(title, emphasis=None, description=None) %}
+  <div class="section-head">
+    <h2>
+      {{ title }}{% if emphasis %} <em>{{ emphasis }}</em>{% endif %}
+    </h2>
+    {% if description %}
+      <p>{{ description }}</p>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro panel_head(title, description=None, heading='h3', description_class=None) %}
+  <div class="panel-head">
+    {% if heading == 'h2' %}
+      <h2>{{ title }}</h2>
+    {% else %}
+      <h3>{{ title }}</h3>
+    {% endif %}
+    {% if description %}
+      <p{% if description_class %} class="{{ description_class }}"{% endif %}>{{ description }}</p>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro metric(value, label, icon_url=None, lead=false, note=None) %}
+  <article class="metric{% if lead %} metric--lead{% endif %}">
+    {% if icon_url %}
+      <img class="metric-icon" src="{{ icon_url }}" alt="" />
+    {% endif %}
+    <span class="metric-value">{{ value }}</span>
+    <span class="metric-label">{{ label }}</span>
+    {% if note %}
+      <span class="metric-note">{{ note }}</span>
+    {% endif %}
+  </article>
+{% endmacro %}
+
+{% macro chart_panel(title, chart_id, description=None) %}
+  <div class="panel">
+    {{ panel_head(title, description) }}
+    <div class="chart-plot" id="{{ chart_id }}"></div>
+  </div>
+{% endmacro %}
+
+{% macro flash_messages(messages, wrapped=true) %}
+  {% if messages %}
+    {% if wrapped %}<div class="flash-wrap">{% endif %}
+    {% for category, message in messages %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% if wrapped %}</div>{% endif %}
+  {% endif %}
+{% endmacro %}

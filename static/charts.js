@@ -63,4 +63,21 @@
   window.gbApplyChartTheme = function (theme) {
     applyPalette(theme);
   };
+
+  // Plotly wrapper: missing CDN, bad data, or render errors show inline fallback copy.
+  window.gbPlotly = function (elementId, data, layout, config) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (typeof Plotly === "undefined") {
+      el.innerHTML =
+        '<p class="chart-fallback" role="status">Charts could not load. Check your network connection and refresh.</p>';
+      return;
+    }
+    try {
+      Plotly.newPlot(elementId, data, layout, config || { displayModeBar: false, responsive: true });
+    } catch (err) {
+      el.innerHTML =
+        '<p class="chart-fallback" role="status">This chart could not be drawn for the current data.</p>';
+    }
+  };
 })();

@@ -1,22 +1,21 @@
 ﻿{% extends "base.html" %}
+{% from 'macros/ui.html' import section_head, panel_head, metric, chart_panel %}
 
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
   {% if report.empty %}
-    <section class="panel">
-      <div class="section-head">
-        <h2>No data available</h2>
-        <p>Use the date range above or run a cache refresh from Settings.</p>
-      </div>
-    </section>
+    {% set actions = [
+      (url_for('settings'), 'Open Settings', 'btn-primary'),
+      (url_for('dashboard', range='last_12_months'), 'Try last 12 months', 'btn-secondary'),
+    ] %}
+    {% set title = 'No data for this range' %}
+    {% set description = 'Adjust the date range above, or refresh orders from WineDirect in Settings if the cache is empty.' %}
+    {% include 'partials/empty_state.html' %}
   {% else %}
     <section class="metrics-section">
-      <div class="section-head">
-        <h2>Financial <em>snapshot</em></h2>
-        <p>Key figures for the selected period.</p>
-      </div>
-      <div class="metrics-strip">
+      {{ section_head('Financial', emphasis='snapshot', description='Key figures for the selected period.') }}
+      <div class="metrics-strip metrics-strip--snapshot">
         {% set kpi_icons = {
           "Net Sales": "icons/Net Sales.png",
           "Product Net Sales": "icons/Net Sales.png",
@@ -41,112 +40,69 @@
           "Lowest Day": "icons/Lowest month.png"
         } %}
         {% for label, value in report.kpis %}
-          <article class="metric">
-            {% set icon = kpi_icons.get(label) %}
-            {% if icon %}
-              <img class="metric-icon" src="{{ url_for('static', filename=icon) }}" alt="" />
-            {% endif %}
-            <span class="metric-value">{{ value }}</span>
-            <span class="metric-label">{{ label }}</span>
-          </article>
+          {% set icon = kpi_icons.get(label) %}
+          {{ metric(
+            value,
+            label,
+            icon_url=url_for('static', filename=icon) if icon else None,
+            lead=loop.first
+          ) }}
         {% endfor %}
       </div>
     </section>
 
     {% if tours_report and not tours_report.empty %}
       <section class="metrics-section">
-        <div class="section-head">
-          <h2>Tour bookings</h2>
-          <p>Tock tour activity for the same period.</p>
-        </div>
+        {{ section_head('Tour bookings', description='Tock tour activity for the same period.') }}
         <div class="metrics-strip">
           {% for label, value in tours_report.kpis %}
             {% if label in ["Bookings", "Guests", "Collected"] %}
-              <article class="metric">
-                <span class="metric-value">{{ value }}</span>
-                <span class="metric-label">{{ label }}</span>
-              </article>
+              {{ metric(value, label) }}
             {% endif %}
           {% endfor %}
         </div>
       </section>
 
       <section class="grid two-col">
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Tour bookings & guests</h3>
-            <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} bookings (bars) and guests (line)</p>
-          </div>
-          <div class="chart-plot" id="tours-dashboard-bookings"></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Tour collected</h3>
-            <p>{% if is_single_month %}Daily{% else %}Monthly{% endif %} collected revenue</p>
-          </div>
-          <div class="chart-plot" id="tours-dashboard-collected"></div>
-        </div>
+        {{ chart_panel(
+          'Tour bookings & guests',
+          'tours-dashboard-bookings',
+          ('Daily' if is_single_month else 'Monthly') ~ ' bookings (bars) and guests (line)'
+        ) }}
+        {{ chart_panel(
+          'Tour collected',
+          'tours-dashboard-collected',
+          ('Daily' if is_single_month else 'Monthly') ~ ' collected revenue'
+        ) }}
       </section>
     {% endif %}
 
     <section class="grid two-col">
-      <div class="panel">
-        <div class="panel-head">
-          <h3>{% if is_single_month %}Daily{% else %}Monthly{% endif %} net sales</h3>
-          <p>Trend of net sales{% if not is_single_month %} across the year{% endif %}</p>
-        </div>
-        <div class="chart-plot" id="chart-monthly-net-sales"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Orders & {{ unit_label }}</h3>
-          <p>Orders (bars) and {{ unit_label|lower }} (line) each {% if is_single_month %}day{% else %}month{% endif %}</p>
-        </div>
-        <div class="chart-plot" id="chart-orders-units"></div>
-      </div>
+      {{ chart_panel(
+        ('Daily' if is_single_month else 'Monthly') ~ ' net sales',
+        'chart-monthly-net-sales',
+        'Trend of net sales' ~ (' across the year' if not is_single_month else '')
+      ) }}
+      {{ chart_panel(
+        'Orders & ' ~ unit_label,
+        'chart-orders-units',
+        'Orders (bars) and ' ~ unit_label|lower ~ ' (line) each ' ~ ('day' if is_single_month else 'month')
+      ) }}
     </section>
 
     <section class="grid three-col">
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Top products by revenue</h3>
-        </div>
-        <div class="chart-plot" id="chart-top-products-revenue"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Top products by units</h3>
-        </div>
-        <div class="chart-plot" id="chart-top-products-units"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Customer mix</h3>
-        </div>
-        <div class="chart-plot" id="chart-customer-mix"></div>
-      </div>
+      {{ chart_panel('Top products by revenue', 'chart-top-products-revenue') }}
+      {{ chart_panel('Top products by units', 'chart-top-products-units') }}
+      {{ chart_panel('Customer mix', 'chart-customer-mix') }}
     </section>
 
     <section class="grid two-col">
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Sales by channel</h3>
-        </div>
-        <div class="chart-plot" id="chart-sales-by-channel"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Top states (shipped orders)</h3>
-        </div>
-        <div class="chart-plot" id="chart-top-states"></div>
-      </div>
+      {{ chart_panel('Sales by channel', 'chart-sales-by-channel') }}
+      {{ chart_panel('Top states (shipped orders)', 'chart-top-states') }}
     </section>
 
     <section class="panel table-panel">
-      <div class="panel-head">
-        <h3>Monthly summary</h3>
-        <p>Net sales, orders, and {{ unit_label|lower }} by month</p>
-      </div>
+      {{ panel_head('Monthly summary', 'Net sales, orders, and ' ~ unit_label|lower ~ ' by month') }}
       <div class="table-wrap">
         <table>
           <thead>
@@ -207,7 +163,7 @@
       const units = charts.monthly.units || [];
       const unitLabel = "{{ unit_label }}";
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-monthly-net-sales",
         [
           {
@@ -230,7 +186,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-orders-units",
         [
           {
@@ -266,7 +222,7 @@
       const maxRevenue = topRevenueValues.length ? Math.max(...topRevenueValues) : 0;
       const revenuePad = maxRevenue > 0 ? maxRevenue * 0.08 : 1;
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-top-products-revenue",
         [
           {
@@ -291,7 +247,7 @@
       const maxUnits = topUnitsValues.length ? Math.max(...topUnitsValues) : 0;
       const unitsPad = maxUnits > 0 ? maxUnits * 0.05 : 1;
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-top-products-units",
         [
           {
@@ -311,7 +267,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-customer-mix",
         [
           {
@@ -330,7 +286,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-sales-by-channel",
         [
           {
@@ -349,7 +305,7 @@
         { displayModeBar: false, responsive: true }
       );
 
-      Plotly.newPlot(
+      gbPlotly(
         "chart-top-states",
         [
           {
@@ -369,7 +325,7 @@
       );
 
       if (toursCharts && toursCharts.monthly) {
-        Plotly.newPlot(
+        gbPlotly(
           "tours-dashboard-bookings",
           [
             {
@@ -398,7 +354,7 @@
           { displayModeBar: false, responsive: true }
         );
 
-        Plotly.newPlot(
+        gbPlotly(
           "tours-dashboard-collected",
           [
             {

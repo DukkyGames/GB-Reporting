@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import panel_head %}
 
 {% block controls %}
   <form class="filter-form" method="get" action="{{ url_for('inventory') }}" data-autosubmit>
@@ -51,10 +52,7 @@
 
 {% block content %}
   <section class="panel">
-    <div class="panel-head">
-      <h2>Inventory</h2>
-      <p>Inventory snapshot pulled from WineDirect Inventory Service.</p>
-    </div>
+    {{ panel_head('Inventory', 'Inventory snapshot pulled from WineDirect Inventory Service.', heading='h2') }}
     <div class="table-wrap">
       <table>
         <thead>
@@ -71,15 +69,21 @@
           {% for row in inventory %}
             <tr>
               <td>{{ row['sku'] }}</td>
-              <td>{{ row['name'] }}</td>
+              <td class="cell-truncate" title="{{ row['name'] }}">{{ row['name'] }}</td>
               {% if show_barn %}<td>{{ "%.0f"|format(row['barn']) }}</td>{% endif %}
               {% if show_warehouse %}<td>{{ "%.0f"|format(row['warehouse']) }}</td>{% endif %}
               {% if show_library %}<td>{{ "%.0f"|format(row['library']) }}</td>{% endif %}
               <td>{{ "%.0f"|format(row['total']) }}</td>
             </tr>
           {% else %}
-            <tr>
-              <td colspan="6">No inventory records found.</td>
+            <tr class="table-empty-row">
+              <td colspan="6">
+                {% if query or min_total or min_barn or min_warehouse or min_library or hide_zero %}
+                  No rows match these filters. Clear filters or refresh inventory from Settings.
+                {% else %}
+                  No inventory in cache. Run an inventory refresh from Settings.
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

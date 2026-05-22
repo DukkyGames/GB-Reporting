@@ -1,11 +1,9 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import panel_head %}
 
 {% block content %}
   <section class="panel">
-    <div class="panel-head">
-      <h2>Order {{ order['order_number'] }}</h2>
-      <p class="mono">{{ order['order_id'] }}</p>
-    </div>
+    {{ panel_head('Order ' ~ order['order_number'], order['order_id'], heading='h2', description_class='mono') }}
     <div class="detail-grid">
       <div class="detail-card">
         <h3>Summary</h3>
@@ -57,9 +55,7 @@
   </section>
 
   <section class="panel table-panel">
-    <div class="panel-head">
-      <h3>Items</h3>
-    </div>
+    {{ panel_head('Items') }}
     <div class="table-wrap">
       <table>
         <thead>
@@ -100,10 +96,7 @@
 
   {% if raw_pretty %}
     <section class="panel">
-      <div class="panel-head">
-        <h3>Raw Order Detail</h3>
-        <p>Full payload captured from WineDirect.</p>
-      </div>
+      {{ panel_head('Raw Order Detail', 'Full payload captured from WineDirect.') }}
       <pre class="code-block">{{ raw_pretty }}</pre>
     </section>
   {% endif %}

@@ -62,10 +62,18 @@ DB_PATH = os.environ.get(
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-this")
+# Tock CSV uploads; matches client-side check in ui-hardening.js
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
 login_manager = LoginManager()
 login_manager.login_view = "login"
 login_manager.init_app(app)
+
+
+@app.errorhandler(413)
+def upload_too_large(_exc):
+    flash("Upload is too large. Maximum file size is 50 MB.", "error")
+    return redirect(url_for("settings"))
 
 
 class User:
@@ -110,6 +118,16 @@ def _parse_date(value: str | None) -> date | None:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _flash_invalid_custom_dates(range_key: str, start_raw: str | None, end_raw: str | None) -> None:
+    """Tell the user when custom range query params are not valid ISO dates."""
+    if range_key != "custom":
+        return
+    if start_raw and not _parse_date(start_raw):
+        flash("Start date could not be read. Using the default start date.", "warning")
+    if end_raw and not _parse_date(end_raw):
+        flash("End date could not be read. Using the default end date.", "warning")
 
 
 def _default_dates() -> tuple[date, date]:
@@ -573,9 +591,6 @@ def dashboard():
     elif range_key == "last_year":
         start_date = date(today.year - 1, 1, 1)
         end_date = date(today.year - 1, 12, 31)
-    elif range_key == "last_year":
-        start_date = date(today.year - 1, 1, 1)
-        end_date = date(today.year - 1, 12, 31)
     elif range_key == "last_3_months":
         start_date = date(_add_months(today, -2).year, _add_months(today, -2).month, 1)
         end_date = today
@@ -586,6 +601,7 @@ def dashboard():
         start_date = date(today.year, 1, 1)
         end_date = today
     elif range_key == "custom":
+        _flash_invalid_custom_dates(range_key, request.args.get("start"), request.args.get("end"))
         start_date = _parse_date(request.args.get("start")) or start_default
         end_date = _parse_date(request.args.get("end")) or end_default
     if start_date > end_date:
@@ -743,6 +759,7 @@ def products_report():
         start_date = date(today.year, 1, 1)
         end_date = today
     elif range_key == "custom":
+        _flash_invalid_custom_dates(range_key, request.args.get("start"), request.args.get("end"))
         start_date = _parse_date(request.args.get("start")) or start_default
         end_date = _parse_date(request.args.get("end")) or end_default
     if start_date > end_date:
@@ -816,6 +833,8 @@ def tours():
     start_default, end_default = _default_dates()
     start_date = _parse_date(request.args.get("start")) or start_default
     end_date = _parse_date(request.args.get("end")) or end_default
+    if range_key == "custom":
+        _flash_invalid_custom_dates(range_key, request.args.get("start"), request.args.get("end"))
     start_date, end_date = _apply_range_key(range_key, start_date, end_date)
     if start_date and end_date and start_date > end_date:
         start_date, end_date = end_date, start_date
@@ -842,53 +861,69 @@ def tours_upload():
     file = request.files.get("tock_csv")
     if not file or not file.filename:
         flash("Please select a Tock CSV file to upload.", "error")
-        return redirect(url_for("tours"))
+        return redirect(url_for("settings"))
+
+    filename = file.filename.lower()
+    if not filename.endswith(".csv"):
+        flash("Upload a .csv file exported from Tock.", "error")
+        return redirect(url_for("settings"))
 
     replace_existing = request.form.get("replace_existing") == "1"
     if replace_existing:
         clear_tock_transactions(DB_PATH)
 
     rows = []
-    wrapper = TextIOWrapper(file.stream, encoding="utf-8-sig")
-    reader = csv.DictReader(wrapper)
-    for row in reader:
-        rows.append(
-            {
-                "transaction_id": row.get("Transaction ID"),
-                "first_transaction_id": row.get("First Transaction ID"),
-                "confirmation_code": row.get("Confirmation Code"),
-                "action": row.get("Action"),
-                "transaction_date": row.get("Transaction Date"),
-                "booking_date": row.get("Booking Date"),
-                "realized_date": row.get("Realized Date"),
-                "experience": row.get("Experience"),
-                "party_size": _parse_int(row.get("Party Size")),
-                "price_per_person": _parse_float(row.get("Price Per Person")),
-                "sub_total": _parse_float(row.get("Sub total")),
-                "tax": _parse_float(row.get("Tax")),
-                "service_charge": _parse_float(row.get("Service Charge")),
-                "gratuity_charge": _parse_float(row.get("Gratuity Charge")),
-                "fees": _parse_float(row.get("Fees")),
-                "charges": _parse_float(row.get("Charges")),
-                "comp": _parse_float(row.get("Comp")),
-                "discount": _parse_float(row.get("Discount")),
-                "total_price": _parse_float(row.get("Total Price")),
-                "gift_card_value": _parse_float(row.get("Gift Card Value")),
-                "payment_collected": _parse_float(row.get("Payment Collected")),
-                "payment_refunded": _parse_float(row.get("Payment Refunded")),
-                "net_payout_amount": _parse_float(row.get("Net Payout Amount")),
-                "booking_method": row.get("Booking Method"),
-                "payment_type": row.get("Payment Type"),
-                "email": row.get("Email"),
-                "first_name": row.get("First Name"),
-                "last_name": row.get("Last Name"),
-                "raw_json": json.dumps(row, default=str),
-            }
-        )
+    try:
+        wrapper = TextIOWrapper(file.stream, encoding="utf-8-sig")
+        reader = csv.DictReader(wrapper)
+        for row in reader:
+            rows.append(
+                {
+                    "transaction_id": row.get("Transaction ID"),
+                    "first_transaction_id": row.get("First Transaction ID"),
+                    "confirmation_code": row.get("Confirmation Code"),
+                    "action": row.get("Action"),
+                    "transaction_date": row.get("Transaction Date"),
+                    "booking_date": row.get("Booking Date"),
+                    "realized_date": row.get("Realized Date"),
+                    "experience": row.get("Experience"),
+                    "party_size": _parse_int(row.get("Party Size")),
+                    "price_per_person": _parse_float(row.get("Price Per Person")),
+                    "sub_total": _parse_float(row.get("Sub total")),
+                    "tax": _parse_float(row.get("Tax")),
+                    "service_charge": _parse_float(row.get("Service Charge")),
+                    "gratuity_charge": _parse_float(row.get("Gratuity Charge")),
+                    "fees": _parse_float(row.get("Fees")),
+                    "charges": _parse_float(row.get("Charges")),
+                    "comp": _parse_float(row.get("Comp")),
+                    "discount": _parse_float(row.get("Discount")),
+                    "total_price": _parse_float(row.get("Total Price")),
+                    "gift_card_value": _parse_float(row.get("Gift Card Value")),
+                    "payment_collected": _parse_float(row.get("Payment Collected")),
+                    "payment_refunded": _parse_float(row.get("Payment Refunded")),
+                    "net_payout_amount": _parse_float(row.get("Net Payout Amount")),
+                    "booking_method": row.get("Booking Method"),
+                    "payment_type": row.get("Payment Type"),
+                    "email": row.get("Email"),
+                    "first_name": row.get("First Name"),
+                    "last_name": row.get("Last Name"),
+                    "raw_json": json.dumps(row, default=str),
+                }
+            )
+    except UnicodeDecodeError:
+        flash("Could not read the file. Re-export from Tock as UTF-8 CSV and try again.", "error")
+        return redirect(url_for("settings"))
+
+    if not rows:
+        flash("No data rows found in the CSV. Check that you exported transactions, not an empty report.", "error")
+        return redirect(url_for("settings"))
 
     inserted = upsert_tock_transactions(DB_PATH, rows)
-    flash(f"Imported {inserted} Tock transactions.", "info")
-    return redirect(url_for("tours"))
+    if inserted == 0:
+        flash("No transactions were imported. Column names may not match the expected Tock export.", "warning")
+    else:
+        flash(f"Imported {inserted} Tock transactions.", "info")
+    return redirect(url_for("settings"))
 
 
 @app.route("/orders", methods=["GET"])

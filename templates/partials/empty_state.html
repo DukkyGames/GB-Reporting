@@ -1,0 +1,12 @@
+{# Reusable empty state: set title, description, and optional action links before include #}
+<section class="empty-state panel" role="status" aria-live="polite">
+  <h2>{{ title }}</h2>
+  <p>{{ description }}</p>
+  {% if actions %}
+    <div class="empty-state-actions">
+      {% for href, label, class in actions %}
+        <a class="btn {{ class|default('btn-secondary') }}" href="{{ href }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>

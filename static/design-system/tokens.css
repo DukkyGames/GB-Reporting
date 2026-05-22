@@ -1,0 +1,116 @@
+/* Grimm's Bluff Reporting — design tokens (imported by styles.css) */
+
+/* Dark default (:root) matches public site; [data-theme="light"] for bright rooms */
+:root {
+  /* Typography families */
+  --serif: "Cormorant Garamond", Georgia, serif;
+  --sans: "Jost", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: var(--sans);
+
+  /* Type scale (product UI: fixed rem, not fluid) */
+  --type-body: 0.9375rem;
+  --type-body-sm: 0.875rem;
+  --type-ui: 0.8125rem;
+  --type-caption: 0.6875rem;
+  --type-label: 0.625rem;
+  --type-display-sm: 1.25rem;
+  --type-display-md: 1.75rem;
+  --type-metric: 1.5rem;
+  --type-metric-lead: clamp(1.75rem, 2.5vw, 2.25rem);
+
+  --tracking-label: 0.22em;
+  --tracking-button: 0.16em;
+  --tracking-nav: 0.18em;
+  --leading-tight: 1.1;
+  --leading-ui: 1.5;
+  --leading-prose: 1.7;
+
+  /* Surfaces & text */
+  --bg: oklch(10% 0.025 30);
+  --bg-elevated: oklch(13% 0.022 30);
+  --bg-muted: oklch(16% 0.02 30);
+  --text: oklch(93% 0.008 75);
+  --text-muted: oklch(55% 0.015 75);
+  --text-dim: oklch(75% 0.012 75);
+  --accent: oklch(65% 0.1 60);
+  --accent-hover: oklch(72% 0.1 62);
+  --accent-soft: oklch(65% 0.1 60 / 0.15);
+  --border: oklch(90% 0.01 75 / 0.1);
+  --border-strong: oklch(90% 0.01 75 / 0.2);
+  --shadow: 0 12px 40px oklch(5% 0.02 30 / 0.45);
+  --toolbar-bg: oklch(8% 0.025 30 / 0.95);
+  --row-hover: oklch(18% 0.02 30);
+  --row-alt: oklch(14% 0.022 30);
+  --focus-ring: oklch(65% 0.1 60 / 0.35);
+
+  /* Data viz (CSS; Plotly hex mirrors these in charts.js) */
+  --chart-sage: oklch(55% 0.04 145);
+  --chart-slate: oklch(48% 0.03 250);
+
+  /* Semantic feedback */
+  --error-bg: oklch(25% 0.06 25);
+  --error-text: oklch(78% 0.08 25);
+  --info-bg: oklch(22% 0.04 60);
+  --info-text: oklch(85% 0.06 75);
+  --warn-bg: oklch(28% 0.06 85);
+  --warn-text: oklch(88% 0.08 85);
+  --metric-icon-filter: none;
+
+  /* Shape & motion */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --sidebar-w: 248px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration: 200ms;
+
+  /* 4pt spacing — tight groups vs generous sections */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+  --gap-tile: var(--space-2xs);
+  --gap-section: var(--space-3xl);
+
+  /* Stacking */
+  --z-sticky: 10;
+  --z-dropdown: 40;
+  --z-drawer-backdrop: 25;
+  --z-drawer: 30;
+  --z-skip: 1000;
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg: oklch(96% 0.008 75);
+  --bg-elevated: oklch(99% 0.005 80);
+  --bg-muted: oklch(93% 0.01 78);
+  --text: oklch(18% 0.025 30);
+  --text-muted: oklch(48% 0.02 55);
+  --text-dim: oklch(38% 0.025 40);
+  --accent: oklch(52% 0.1 58);
+  --accent-hover: oklch(45% 0.1 58);
+  --accent-soft: oklch(52% 0.1 58 / 0.12);
+  --border: oklch(30% 0.02 40 / 0.12);
+  --border-strong: oklch(30% 0.02 40 / 0.22);
+  --shadow: 0 1px 2px oklch(25% 0.02 40 / 0.06), 0 12px 32px oklch(25% 0.02 40 / 0.08);
+  --toolbar-bg: oklch(98% 0.006 80 / 0.94);
+  --row-hover: oklch(94% 0.01 80);
+  --row-alt: oklch(97% 0.008 80);
+  --focus-ring: oklch(52% 0.1 58 / 0.25);
+  --error-bg: oklch(95% 0.04 25);
+  --error-text: oklch(38% 0.1 25);
+  --info-bg: oklch(94% 0.03 75);
+  --info-text: oklch(32% 0.06 55);
+  --warn-bg: oklch(94% 0.05 85);
+  --warn-text: oklch(38% 0.1 70);
+  --metric-icon-filter: brightness(0) saturate(100%);
+
+  color-scheme: light;
+}

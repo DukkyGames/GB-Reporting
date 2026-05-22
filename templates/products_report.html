@@ -1,19 +1,20 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import panel_head %}
 
 {% block content %}
   {% if report.empty %}
-    <section class="panel">
-      <h2>No product sales data</h2>
-      <p>Refresh orders and items, then try a wider date range.</p>
-    </section>
+    {% set actions = [
+      (url_for('settings'), 'Refresh cache', 'btn-primary'),
+      (url_for('products_report', range='last_12_months'), 'Wider date range', 'btn-secondary'),
+    ] %}
+    {% set title = 'No product sales in this range' %}
+    {% set description = 'Run an orders refresh from Settings, then widen the date range if needed.' %}
+    {% include 'partials/empty_state.html' %}
   {% else %}
     <section class="report-grid">
       <div class="report-main">
         <section class="panel">
-          <div class="panel-head">
-            <h2>Sales Report by SKU</h2>
-            <p>{{ start_date }} to {{ end_date }}</p>
-          </div>
+          {{ panel_head('Sales Report by SKU', start_date ~ ' to ' ~ end_date, heading='h2') }}
           {% for sku in report.skus %}
             <div class="sku-block">
               <div class="sku-header">
@@ -61,9 +62,7 @@
       </div>
       <aside class="report-side">
         <section class="panel">
-          <div class="panel-head">
-            <h3>Top Selling SKUs</h3>
-          </div>
+          {{ panel_head('Top Selling SKUs') }}
           <div class="table-wrap">
             <table>
               <thead>
@@ -87,9 +86,7 @@
         </section>
 
         <section class="panel">
-          <div class="panel-head">
-            <h3>Inventory Available by Label</h3>
-          </div>
+          {{ panel_head('Inventory Available by Label') }}
           <div class="table-wrap">
             <table>
               <thead>
@@ -115,9 +112,7 @@
         </section>
 
         <section class="panel">
-          <div class="panel-head">
-            <h3>Inventory Available</h3>
-          </div>
+          {{ panel_head('Inventory Available') }}
           <div class="table-wrap">
             <table>
               <thead>

@@ -2,6 +2,8 @@
 
 Aligned with [grimmsbluff.events](https://www.grimmsbluff.events) and `grimms-bluff-wines/Reference/gb-styles.css`.
 
+**Implementation catalog:** `documentation/design-system.md` (tokens in `static/design-system/tokens.css`, macros in `templates/macros/ui.html`).
+
 ## Scene
 
 Estate team reviews numbers in the office or tasting room, often on a laptop in dimmer light. **Default theme: dark** (matches the public site). **Light theme** available for bright rooms and management preference.
@@ -30,9 +32,14 @@ Set via `data-theme="dark"` (default) or `data-theme="light"` on `<html>`. Persi
 
 ## Layout
 
+- **Spacing scale** (4pt base in `static/styles.css`): `--space-xs` through `--space-4xl`; `--gap-tile` (2px mosaic between tiles); `--gap-section` (48px between major blocks)
 - Sidebar nav with gold active indicator (left rule, like site filter tabs)
 - Sticky toolbar for date range and unit
-- 2px grid gaps between cards (site product grid rhythm)
+- Tiled panels/metrics use `--gap-tile`; chart sections separated by `--gap-section`
+- Dashboard snapshot: first KPI uses `.metric--lead` (spans 2 columns ≥721px)
+- **≥861px**: persistent left sidebar (laptop / tablet landscape)
+- **≤860px**: off-canvas drawer (`nav-mobile.js`, menu control in toolbar), stacked toolbar filters, safe-area padding
+- **≤720px**: single-column metrics, full-width filter fields, 44px touch targets on coarse pointers
 
 ## Charts (Plotly)
 

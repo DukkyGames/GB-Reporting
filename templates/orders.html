@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import panel_head %}
 
 {% block controls %}
   <form class="filter-form" method="get" action="{{ url_for('orders') }}" data-autosubmit>
@@ -52,10 +53,11 @@
 
 {% block content %}
   <section class="panel table-panel">
-    <div class="panel-head">
-      <h2>Orders</h2>
-      <p>Showing {{ per_page }} per page ({{ total_rows }} total){% if query %} matching "{{ query }}"{% endif %}.</p>
-    </div>
+    {{ panel_head(
+      'Orders',
+      'Showing ' ~ per_page ~ ' per page (' ~ total_rows ~ ' total)' ~ (' matching "' ~ query ~ '"' if query else '') ~ '.',
+      heading='h2'
+    ) }}
     <div class="table-wrap">
       <table>
         <thead>
@@ -75,16 +77,22 @@
             <tr>
               <td><a href="{{ url_for('order_detail', order_id=order['order_id'], unit=unit) }}">{{ order['order_number'] }}</a></td>
               <td>{{ order['completed_date'] }}</td>
-              <td>{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}</td>
-              <td>{{ order['order_type'] }}</td>
-              <td>{{ order['order_status'] }}</td>
+              <td class="cell-truncate" title="{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}">{{ order['bill_first_name'] }} {{ order['bill_last_name'] }}</td>
+              <td class="cell-truncate" title="{{ order['order_type'] }}">{{ order['order_type'] }}</td>
+              <td class="cell-truncate" title="{{ order['order_status'] }}">{{ order['order_status'] }}</td>
               <td>{{ order['ship_state'] }}</td>
               <td>${{ "%.2f"|format(order['order_total'] or 0) }}</td>
               <td>{{ "Yes" if order['pickup'] else "No" }}</td>
             </tr>
           {% else %}
-            <tr>
-              <td colspan="8">No orders found.</td>
+            <tr class="table-empty-row">
+              <td colspan="8">
+                {% if query or order_type or order_status or ship_state or min_total or max_total or pickup %}
+                  No orders match these filters. Try clearing search or choosing a wider date range.
+                {% else %}
+                  No orders in this date range. Widen the range or refresh the cache from Settings.
+                {% endif %}
+              </td>
             </tr>
           {% endfor %}
         </tbody>

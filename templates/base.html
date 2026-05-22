@@ -1,3 +1,4 @@
+{% from 'macros/ui.html' import flash_messages %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,6 +18,7 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='Logo.png') }}" />
 </head>
 <body class="app-body">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   {% set current_range = range_key|default(request.args.get("range", "custom")) %}
   {% set current_start = start_date|default(request.args.get("start", "")) %}
   {% set current_end = end_date|default(request.args.get("end", "")) %}
@@ -36,8 +38,10 @@
     ("settings", "Settings", "settings"),
   ] %}
 
+  <div class="nav-backdrop" hidden aria-hidden="true"></div>
+
   <div class="app-shell">
-    <aside class="sidebar" aria-label="Main navigation">
+    <aside class="sidebar" id="app-sidebar" aria-label="Main navigation">
       <a class="sidebar-brand" href="{{ url_for('dashboard') }}">
         <span class="brand-logo-slot">
           {# Logo.png = light mark for dark theme; Logo-Black.png = dark mark for light theme #}
@@ -83,6 +87,15 @@
 
     <div class="app-main">
       <header class="toolbar" aria-label="Date range and exports">
+        <button
+          type="button"
+          class="nav-toggle"
+          aria-expanded="false"
+          aria-controls="app-sidebar"
+          aria-label="Open navigation"
+        >
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+        </button>
         <form class="toolbar-form date-form" method="get" action="{{ request.path }}" data-autosubmit>
           <div class="toolbar-group">
             <label class="field">
@@ -138,15 +151,9 @@
         {% endif %}
       </header>
 
-      <main class="page">
+      <main class="page" id="main-content">
         {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="flash-wrap">
-              {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
-              {% endfor %}
-            </div>
-          {% endif %}
+          {{ flash_messages(messages) }}
         {% endwith %}
 
         {% block controls %}
@@ -308,6 +315,8 @@
   </script>
 
   <script src="{{ url_for('static', filename='theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='nav-mobile.js') }}"></script>
+  <script src="{{ url_for('static', filename='ui-hardening.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

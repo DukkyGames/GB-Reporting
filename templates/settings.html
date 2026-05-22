@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/ui.html' import panel_head %}
 
 {% block controls %}
   <form class="filter-form" method="post" action="{{ url_for('tours_upload') }}" enctype="multipart/form-data">
@@ -15,6 +16,9 @@
 {% endblock %}
 
 {% block content %}
+  <div class="status-banner" id="cache-status-banner" role="status" hidden>
+    Could not reach cache status. Check your connection; counts may be stale until you refresh the page.
+  </div>
   <section class="panel control-panel">
     <div class="control-group">
       <form method="post" action="{{ url_for('refresh_orders') }}" class="inline-form" data-confirm="This will clear all orders and reload from WineDirect. Continue?">
@@ -36,10 +40,7 @@
   </section>
 
   <section class="panel status-panel">
-    <div class="panel-head">
-      <h2>Cache Status</h2>
-      <p>Track refresh progress and cached totals.</p>
-    </div>
+    {{ panel_head('Cache Status', 'Track refresh progress and cached totals.', heading='h2') }}
     <div class="status-grid">
       <div class="status-item">
         <span class="status-label">Refresh State</span>
@@ -117,7 +118,7 @@
       {% if cache_status.last_error %}
         <div class="status-item status-error" data-cache-status="error_block">
           <span class="status-label">Last Error</span>
-          <span class="status-value" data-cache-status="last_error">{{ cache_status.last_error }}</span>
+          <span class="status-value status-value--scroll" data-cache-status="last_error">{{ cache_status.last_error }}</span>
         </div>
       {% endif %}
     </div>
@@ -145,11 +146,22 @@
     statusMap[key].push(field);
   }
 
+  let cacheStatusFailures = 0;
+  const cacheBanner = document.getElementById("cache-status-banner");
+
   async function refreshCacheStatus() {
     try {
       const response = await fetch("{{ url_for('cache_status') }}", { cache: "no-store" });
       if (!response.ok) {
+        cacheStatusFailures += 1;
+        if (cacheBanner && cacheStatusFailures >= 2) {
+          cacheBanner.hidden = false;
+        }
         return;
+      }
+      cacheStatusFailures = 0;
+      if (cacheBanner) {
+        cacheBanner.hidden = true;
       }
       const data = await response.json();
       const stateText = data.in_progress ? "In progress" : "Idle";
@@ -215,7 +227,7 @@
             errorDiv.setAttribute("data-cache-status", "error_block");
             errorDiv.innerHTML = `
               <span class="status-label">Last Error</span>
-              <span class="status-value" data-cache-status="last_error"></span>
+              <span class="status-value status-value--scroll" data-cache-status="last_error"></span>
             `;
             grid.appendChild(errorDiv);
             statusMap.error_block = [errorDiv];
@@ -227,7 +239,10 @@
         }
       }
     } catch (err) {
-      // Silent fail to avoid UI noise on transient network issues.
+      cacheStatusFailures += 1;
+      if (cacheBanner && cacheStatusFailures >= 2) {
+        cacheBanner.hidden = false;
+      }
     }
   }
 
